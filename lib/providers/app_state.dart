@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/dump.dart';
 import '../models/reflection_cycle.dart';
 import '../services/local_db_service.dart';
+import '../services/supabase_service.dart';
 
 class AppState extends ChangeNotifier {
   final LocalDbService _localDb = LocalDbService();
@@ -24,8 +25,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     
     await fetchPendingDumps();
+    await fetchCurrentCycle();
     
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> fetchCurrentCycle() async {
+    _currentCycle = await SupabaseService().getOrCreateCurrentCycle();
     notifyListeners();
   }
 

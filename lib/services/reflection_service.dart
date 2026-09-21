@@ -1,62 +1,61 @@
 import '../models/reflection_session.dart';
 import '../models/insight_card.dart';
-import 'package:uuid/uuid.dart';
+import 'supabase_service.dart';
 
 class ReflectionService {
   static final ReflectionService _instance = ReflectionService._internal();
   factory ReflectionService() => _instance;
   ReflectionService._internal();
 
-  final Uuid _uuid = const Uuid();
+  final SupabaseService _supabase = SupabaseService();
 
   Future<ReflectionSession> generateSummary(String cycleId) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 2));
-    
+    // Calls Edge Function which generates summary + questions, and creates a session record
+    final data = await _supabase.generateReflection(cycleId);
+    final sessionId = data['session_id'];
+
+    // For now we don't return the full summary model, we'll fetch the generated questions next.
     return ReflectionSession(
-      id: _uuid.v4(),
+      id: sessionId,
       cycleId: cycleId,
-      userId: 'local_user',
+      userId: _supabase.currentUser?.id ?? 'local_user',
       status: SessionStatus.active,
-      generatedSummary: 'You spent much of this cycle moving several unfinished ideas forward, but the clearest pattern was a desire to simplify your workflow.',
+      generatedSummary: '', // Will fetch later if needed
       startedAt: DateTime.now(),
       createdAt: DateTime.now(),
     );
   }
 
   Future<List<ReflectionQuestion>> generateQuestions(String sessionId) async {
-    await Future.delayed(const Duration(seconds: 2));
-    
-    return [
-      ReflectionQuestion(
-        id: _uuid.v4(),
-        sessionId: sessionId,
-        position: 1,
-        questionText: 'What is one specific way you can simplify your workflow tomorrow?',
-        createdAt: DateTime.now(),
-      ),
-      ReflectionQuestion(
-        id: _uuid.v4(),
-        sessionId: sessionId,
-        position: 2,
-        questionText: 'What idea are you holding onto that you should let go of?',
-        createdAt: DateTime.now(),
-      ),
-    ];
+    final list = await _supabase.getReflectionQuestions(sessionId);
+    return list.map((q) => ReflectionQuestion(
+      id: q['id'] as String,
+      sessionId: q['session_id'] as String,
+      position: q['position'] as int,
+      questionText: q['question_text'] as String,
+      createdAt: DateTime.parse(q['created_at'] as String),
+    )).toList();
   }
 
   Future<InsightCard> generateInsightCard(String sessionId, List<ReflectionAnswer> answers) async {
-    await Future.delayed(const Duration(seconds: 2));
-    
+    // 1. Submit answers to DB
+    for (final ans in answers) {
+      await _supabase.submitReflectionAnswer(ans.questionId, ans.answerText ?? '');
+    }
+
+    // 2. Call generate-insight edge function
+    final data = await _supabase.generateInsight(sessionId);
+    final cardData = data['insight_card'];
+
     return InsightCard(
-      id: _uuid.v4(),
-      sessionId: sessionId,
-      userId: 'local_user',
-      title: 'Simplification',
-      mainInsight: 'You are carrying cognitive load from abandoned projects.',
-      standout: 'The clearest pattern was a desire to simplify your workflow.',
-      suggestion: 'Choose one of the ideas and give it a small, specific next action.',
-      createdAt: DateTime.now(),
+      id: cardData['id'] as String,
+      sessionId: cardData['session_id'] as String,
+      userId: cardData['user_id'] as String,
+      title: cardData['title'] as String,
+      mainInsight: cardData['main_insight'] as String,
+      standout: cardData['standout'] as String,
+      suggestion: cardData['suggestion'] as String,
+      createdAt: DateTime.parse(cardData['created_at'] as String),
     );
   }
 }

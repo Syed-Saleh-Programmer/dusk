@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/app_state.dart';
+import '../../models/reflection_cycle.dart';
 import 'capture_screen.dart';
 import 'history_screen.dart';
 import 'reflection_flow_screen.dart';
@@ -81,43 +84,71 @@ class TodayScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            'Your Reflection Cycle',
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          const SizedBox(height: 20),
-          // Placeholder for cycle status
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('In Progress', style: Theme.of(context).textTheme.labelSmall),
-                  const SizedBox(height: 8),
-                  Text('Capturing thoughts...', style: Theme.of(context).textTheme.bodyMedium),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ReflectionFlowScreen(cycleId: 'current-cycle'),
-                          ),
-                        );
-                      },
-                      child: const Text('Begin Reflection'),
-                    ),
-                  ),
-                ],
+      body: Consumer<AppState>(
+        builder: (context, appState, child) {
+          final cycle = appState.currentCycle;
+          
+          if (appState.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (cycle == null) {
+            return const Center(child: Text('No active cycle'));
+          }
+
+          final bool isCompleted = cycle.status == CycleStatus.completed;
+
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Text(
+                'Your Reflection Cycle',
+                style: Theme.of(context).textTheme.headlineMedium,
               ),
-            ),
-          ),
-        ],
+              const SizedBox(height: 20),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isCompleted ? 'Completed' : 'In Progress', 
+                        style: Theme.of(context).textTheme.labelSmall
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        isCompleted 
+                            ? 'You have completed your reflection for today.' 
+                            : 'Capturing thoughts...', 
+                        style: Theme.of(context).textTheme.bodyMedium
+                      ),
+                      const SizedBox(height: 24),
+                      if (!isCompleted)
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ReflectionFlowScreen(cycleId: cycle.id),
+                                ),
+                              ).then((_) {
+                                // Refresh when coming back
+                                if (!context.mounted) return;
+                                context.read<AppState>().fetchCurrentCycle();
+                              });
+                            },
+                            child: const Text('Begin Reflection'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/supabase_service.dart';
+import '../../services/notification_service.dart';
 import 'auth_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -20,8 +21,24 @@ class SettingsScreen extends StatelessWidget {
             title: const Text('Reflection Schedule'),
             subtitle: const Text('Configure when Dusk prompts you.'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              // TODO: Implement schedule UI
+            onTap: () async {
+              final TimeOfDay? time = await showTimePicker(
+                context: context,
+                initialTime: const TimeOfDay(hour: 20, minute: 0),
+              );
+              if (time != null) {
+                final now = DateTime.now();
+                var scheduledDate = DateTime(now.year, now.month, now.day, time.hour, time.minute);
+                if (scheduledDate.isBefore(now)) {
+                  scheduledDate = scheduledDate.add(const Duration(days: 1));
+                }
+                await NotificationService().scheduleReflectionReminder(scheduledDate, 'current-cycle');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Reminder set for ${time.format(context)}')),
+                  );
+                }
+              }
             },
           ),
           const Divider(),

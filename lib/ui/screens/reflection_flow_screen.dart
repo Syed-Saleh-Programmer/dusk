@@ -45,7 +45,7 @@ class _ReflectionFlowScreenState extends State<ReflectionFlowScreen> {
       });
     } catch (e) {
       setState(() {
-        _loadingMessage = 'Error starting reflection: \$e';
+        _loadingMessage = 'Error starting reflection: $e';
       });
     }
   }
@@ -90,7 +90,7 @@ class _ReflectionFlowScreenState extends State<ReflectionFlowScreen> {
       }
     } catch (e) {
       setState(() {
-        _loadingMessage = 'Error generating insight: \$e';
+        _loadingMessage = 'Error generating insight: $e';
       });
     }
   }
@@ -116,7 +116,7 @@ class _ReflectionFlowScreenState extends State<ReflectionFlowScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Question \${_currentQuestionIndex + 1} of \${_questions.length}'),
+        title: Text('Question ${_currentQuestionIndex + 1} of ${_questions.length}'),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),

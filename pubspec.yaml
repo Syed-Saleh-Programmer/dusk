@@ -46,6 +46,9 @@ dependencies:
   uuid: ^4.6.0
   path: ^1.9.1
   timezone: ^0.11.1
+  google_sign_in: 6.2.1
+  flutter_animate: ^4.5.2
+  lucide_icons: ^0.257.0
 
 dev_dependencies:
   flutter_test:

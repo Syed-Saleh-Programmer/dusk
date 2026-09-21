@@ -15,10 +15,9 @@ void main() async {
 
   await NotificationService().init();
 
-  // TODO: Replace with real Supabase credentials
   await Supabase.initialize(
-    url: 'https://placeholder-project-id.supabase.co',
-    publishableKey: 'placeholder-anon-key',
+    url: 'https://cslpsosodlqsinmkhygn.supabase.co',
+    publishableKey: 'sb_publishable_Khn9kIa-3nh27iSxlOWhoQ__gzkFLsV',
   );
 
   runApp(

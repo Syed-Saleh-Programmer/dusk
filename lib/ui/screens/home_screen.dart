@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'capture_screen.dart';
 import 'history_screen.dart';
 import 'reflection_flow_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -69,6 +70,16 @@ class TodayScreen extends StatelessWidget {
         title: const Text('Today'),
         elevation: 0,
         backgroundColor: Colors.transparent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

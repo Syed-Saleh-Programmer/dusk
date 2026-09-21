@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'ui/theme/app_theme.dart';
 import 'ui/screens/home_screen.dart';
+import 'ui/screens/auth_screen.dart';
+import 'services/supabase_service.dart';
 
 import 'services/notification_service.dart';
 
@@ -37,7 +39,7 @@ class DuskApp extends StatelessWidget {
     return MaterialApp(
       title: 'Dusk',
       theme: AppTheme.lightTheme,
-      home: const HomeScreen(),
+      home: SupabaseService().currentUser == null ? const AuthScreen() : const HomeScreen(),
       debugShowCheckedModeBanner: false,
     );
   }

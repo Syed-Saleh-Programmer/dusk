@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../services/supabase_service.dart';
@@ -119,7 +119,7 @@ class _AuthScreenState extends State<AuthScreen> {
               // Google Sign In Button
               ElevatedButton.icon(
                 onPressed: _isLoading ? null : _submitGoogleSignIn,
-                icon: const Icon(LucideIcons.chrome),
+                icon: const Icon(Icons.g_mobiledata, size: 28),
                 label: const Text('Continue with Google'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,

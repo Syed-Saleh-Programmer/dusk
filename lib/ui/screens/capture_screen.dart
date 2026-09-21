@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:record/record.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -58,7 +58,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
           children: [
             ElevatedButton.icon(
               onPressed: _saveTextDump,
-              icon: const Icon(LucideIcons.send),
+              icon: Icon(LucideIcons.send),
               label: const Text('Save'),
             ),
           ],

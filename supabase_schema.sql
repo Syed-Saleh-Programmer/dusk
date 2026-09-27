@@ -38,13 +38,15 @@ CREATE TABLE dumps (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
+    title TEXT,
     content TEXT,
     transcript TEXT,
     media_url TEXT,
     category TEXT,
     captured_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    sync_status TEXT DEFAULT 'synced'
+    sync_status TEXT DEFAULT 'synced',
+    ai_summary TEXT
 );
 ALTER TABLE dumps ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own dumps" ON dumps FOR ALL USING (auth.uid() = user_id);
@@ -109,6 +111,26 @@ CREATE TABLE insight_cards (
 );
 ALTER TABLE insight_cards ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own insight cards" ON insight_cards FOR ALL USING (auth.uid() = user_id);
+
+-- 8. tasks (Extracted from Dumps, Gentle Next Steps from Insight Cards, or Manual)
+CREATE TABLE IF NOT EXISTS tasks (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    dump_id UUID REFERENCES dumps(id) ON DELETE CASCADE,
+    insight_card_id UUID REFERENCES insight_cards(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    source_type TEXT NOT NULL DEFAULT 'dump',
+    source_label TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    due_date TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    sync_status TEXT DEFAULT 'synced'
+);
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ;
+ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own tasks" ON tasks FOR ALL USING (auth.uid() = user_id);
 
 -- Create Storage Bucket
 INSERT INTO storage.buckets (id, name, public) VALUES ('user-media', 'user-media', false);

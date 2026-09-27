@@ -1,4 +1,4 @@
-enum CycleStatus { scheduled, ready, inProgress, completed, skipped }
+enum CycleStatus { scheduled, ready, pending, inProgress, completed, skipped }
 
 class ReflectionCycle {
   final String id;
@@ -42,19 +42,24 @@ class ReflectionCycle {
 
   factory ReflectionCycle.fromMap(Map<String, dynamic> map) {
     return ReflectionCycle(
-      id: map['id'],
-      userId: map['user_id'],
-      scheduleId: map['schedule_id'],
-      periodStart: DateTime.parse(map['period_start']),
-      periodEnd: DateTime.parse(map['period_end']),
-      status: CycleStatus.values.firstWhere(
-        (e) => e.name == map['status'],
-        orElse: () => CycleStatus.scheduled,
-      ),
+      id: map['id'] ?? '',
+      userId: map['user_id'] ?? '',
+      scheduleId: map['schedule_id'] ?? 'default',
+      periodStart: DateTime.parse(map['period_start'] ?? DateTime.now().toIso8601String()),
+      periodEnd: DateTime.parse(map['period_end'] ?? DateTime.now().toIso8601String()),
+      status: () {
+        final st = map['status'];
+        if (st == 'in_progress') return CycleStatus.inProgress;
+        if (st == 'pending') return CycleStatus.pending;
+        return CycleStatus.values.firstWhere(
+          (e) => e.name == st,
+          orElse: () => CycleStatus.scheduled,
+        );
+      }(),
       summary: map['summary'],
       startedAt: map['started_at'] != null ? DateTime.parse(map['started_at']) : null,
       completedAt: map['completed_at'] != null ? DateTime.parse(map['completed_at']) : null,
-      createdAt: DateTime.parse(map['created_at']),
+      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
     );
   }
 }

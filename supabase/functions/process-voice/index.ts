@@ -33,14 +33,14 @@ serve(async (req) => {
     const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer \${groqApiKey}`
+        'Authorization': `Bearer ${groqApiKey}`
       },
       body: formData
     })
 
     if (!groqResponse.ok) {
       const errorText = await groqResponse.text()
-      throw new Error(`Groq API Error: \${errorText}`)
+      throw new Error(`Groq API Error: ${errorText}`)
     }
 
     const { text } = await groqResponse.json()
@@ -53,7 +53,28 @@ serve(async (req) => {
 
     if (updateError) throw updateError
 
-    return new Response(JSON.stringify({ success: true, transcript: text }), {
+    // 6. Trigger AI summary generation now that transcript is available
+    let title = ''
+    let summary = ''
+    let tasks: string[] = []
+    if (text && text.trim()) {
+      try {
+        const sumRes = await supabaseClient.functions.invoke('generate-dump-summary', {
+          body: { dump_id, content: text, type: 'voice' }
+        })
+        if (sumRes.data) {
+          title = sumRes.data.title || ''
+          summary = sumRes.data.summary || ''
+          if (Array.isArray(sumRes.data.tasks)) {
+            tasks = sumRes.data.tasks
+          }
+        }
+      } catch (sumErr) {
+        console.warn('Could not auto-generate summary for voice:', sumErr)
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, transcript: text, title, summary, tasks }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     })
   } catch (error) {

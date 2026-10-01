@@ -533,7 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ),
                           ),
                           subtitle: Text(
-                            'Quick Capture & Analytics widget setups',
+                            'Quick Capture, Analytics & Dusk Buddy widgets',
                             style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
                           ),
                           trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),

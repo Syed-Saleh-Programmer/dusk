@@ -96,6 +96,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="dusk" android:host="capture" />
                 <data android:scheme="dusk" android:host="home" />
+                <data android:scheme="dusk" android:host="buddy" />
                 <data android:scheme="dusk" android:host="login-callback" />
                 <data android:scheme="dusk" />
             </intent-filter>
@@ -135,6 +136,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/dusk_analytics_widget_info" />
+        </receiver>
+
+        <!-- 4. Dusk Buddy Quick Widget (Round Gradient Button & Dusk Buddy Label) -->
+        <receiver android:name=".DuskBuddyWidgetProvider"
+                  android:label="@string/widget_buddy_label"
+                  android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dusk_buddy_widget_info" />
         </receiver>
 
         <!-- flutter_local_notifications receivers for scheduled notifications and alarms -->

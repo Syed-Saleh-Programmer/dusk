@@ -7,4 +7,6 @@
     <string name="widget_voice_text_desc">Separated floating cards for instant Text and Voice capture.</string>
     <string name="widget_analytics_label">Dusk Analytics &amp; Rhythm</string>
     <string name="widget_analytics_desc">7-day activity graph, capture breakdown charts, and evening ritual readiness.</string>
+    <string name="widget_buddy_label">Dusk Buddy</string>
+    <string name="widget_buddy_desc">Quick launch Dusk Buddy AI companion with one tap.</string>
 </resources>

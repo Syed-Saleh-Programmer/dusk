@@ -22,6 +22,7 @@
 - **Conversational Second Brain**: Chat with Dusk Buddy directly about your past dumps, pending tasks, and historical reflection cycles.
 - **Strict Grounding Guardrails**: Answers strictly from your personal vault with explicit second-brain boundaries (*"Sorry, nothing like that in your second brain"* if out of scope).
 - **Rotating Gradient AI Button**: Located on the Reflection Archive screen snugly above the navigation bar, featuring smooth, continuous gradient rotation animation without jarring size scaling.
+- **Home Screen Quick Widget**: 1×1 transparent widget with the round animated gradient button and "Dusk Buddy" label below for instant one-tap launch from your home screen (configured under **Settings $\rightarrow$ Home Screen Widgets**).
 - **Sleek Modern Input Composer**: Unified card design, fluid multi-line input, character limiter counter, quick clear button, and haptic feedback.
 - **High-Performance Groq API**: Powered by Groq for instantaneous answers using open models (such as `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, etc.) with user-configured API keys.
 

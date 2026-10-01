@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 import '../../models/reflection_cycle.dart';
 import '../../providers/app_state.dart';
 import '../../services/quick_capture_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
+import 'dusk_chat_screen.dart';
 
 class HomeWidgetsScreen extends StatefulWidget {
   const HomeWidgetsScreen({super.key});
@@ -342,6 +344,25 @@ class _HomeWidgetsScreenState extends State<HomeWidgetsScreen> {
                         thoughtCount: thoughtCount,
                         voiceCount: voiceCount,
                       ),
+
+                      const SizedBox(height: 28),
+
+                      // ==========================================
+                      // WIDGET 4: DUSK BUDDY QUICK WIDGET (1x1)
+                      // ==========================================
+                      _buildWidgetHeader(
+                        title: '4. Dusk Buddy Quick Widget',
+                        badge: '1×1 Transparent',
+                        subtitle:
+                            'Transparent 1×1 home screen widget featuring the rotating gradient Dusk Buddy button with label below. Tap to instantly chat with Dusk Buddy.',
+                        onPin: () => _pinWidget(
+                          context,
+                          'DuskBuddyWidgetProvider',
+                          'Dusk Buddy',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildGlassBuddyWidgetPreview(context),
                     ],
                   ),
                 ),
@@ -1134,6 +1155,67 @@ class _HomeWidgetsScreenState extends State<HomeWidgetsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGlassBuddyWidgetPreview(BuildContext context) {
+    final palette = AppTheme.palette;
+    return Center(
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.28),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            DuskAiRotatingGradientButton(
+              palette: palette,
+              size: 58,
+              animateRotation: true,
+              onTap: () {
+                Navigator.of(context).push(
+                  DuskPageRoute.modalSheet(
+                    builder: (_) => const DuskChatScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Dusk Buddy',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+                letterSpacing: -0.2,
+                shadows: [
+                  Shadow(
+                    color: Color(0x99000000),
+                    offset: Offset(0, 1.2),
+                    blurRadius: 3,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

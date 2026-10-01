@@ -5,6 +5,7 @@ import 'package:dusk/services/buddy_context_service.dart';
 import 'package:dusk/services/groq_chat_service.dart';
 import 'package:dusk/ui/screens/history_screen.dart';
 import 'package:dusk/ui/theme/app_theme.dart';
+import 'package:dusk/ui/widgets/dusk_ui_components.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -172,6 +173,51 @@ void main() {
       expect(size.height, 56.0);
 
       // Cleanly dispose repeating animation controller
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('renders Dusk Buddy quick home screen widget preview with transparent container, animated button and label', (tester) async {
+      bool tapped = false;
+      const palette = DuskColorPalette.duskSunset;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Container(
+                width: 140,
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DuskAiRotatingGradientButton(
+                      palette: palette,
+                      size: 58,
+                      animateRotation: false,
+                      onTap: () => tapped = true,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Dusk Buddy'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Dusk Buddy'), findsOneWidget);
+      expect(find.byType(DuskAiRotatingGradientButton), findsOneWidget);
+
+      await tester.tap(find.byType(DuskAiRotatingGradientButton));
+      await tester.pump();
+      expect(tapped, isTrue);
+
       await tester.pumpWidget(const SizedBox());
     });
   });

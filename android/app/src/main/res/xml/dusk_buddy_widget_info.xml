@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="60dp"
+    android:minHeight="60dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:minResizeWidth="48dp"
+    android:minResizeHeight="48dp"
+    android:updatePeriodMillis="86400000"
+    android:initialLayout="@layout/dusk_buddy_widget"
+    android:previewLayout="@layout/dusk_buddy_widget"
+    android:description="@string/widget_buddy_desc"
+    android:resizeMode="none"
+    android:widgetCategory="home_screen" />

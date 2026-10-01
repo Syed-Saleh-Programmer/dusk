@@ -12,6 +12,7 @@ import '../ui/screens/text_capture_screen.dart';
 import '../ui/screens/voice_capture_screen.dart';
 import '../ui/screens/photo_capture_screen.dart';
 import '../ui/screens/paywall_screen.dart';
+import '../ui/screens/dusk_chat_screen.dart';
 import '../ui/widgets/quick_share_modal.dart';
 import '../ui/navigation/dusk_navigation.dart';
 
@@ -37,6 +38,7 @@ class QuickCaptureService {
     'DuskQuickCaptureWidgetProvider',
     'DuskVoiceTextWidgetProvider',
     'DuskAnalyticsWidgetProvider',
+    'DuskBuddyWidgetProvider',
   ];
 
   /// Initializes Share Sheet receiving, Quick Actions (Launcher Shortcuts), and Home Screen Widgets.
@@ -285,6 +287,11 @@ class QuickCaptureService {
       return;
     }
 
+    if (host == 'buddy' || path == 'buddy' || uri.toString().contains('buddy')) {
+      _handleCaptureRoute('action_buddy');
+      return;
+    }
+
     if (host == 'capture' || uri.scheme == 'dusk') {
       if (path == 'voice' || uri.path.contains('voice')) {
         _handleCaptureRoute('action_voice');
@@ -383,6 +390,11 @@ class QuickCaptureService {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleCaptureRoute(shortcutType);
       });
+      return;
+    }
+
+    if (shortcutType == 'action_buddy') {
+      nav.push(DuskPageRoute.modalSheet(builder: (_) => const DuskChatScreen()));
       return;
     }
 

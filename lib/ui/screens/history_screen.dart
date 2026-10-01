@@ -7,6 +7,7 @@ import '../../services/supabase_service.dart';
 import 'past_reflection_screen.dart';
 import 'paywall_screen.dart';
 import 'share_insight_screen.dart';
+import 'dusk_chat_screen.dart';
 import 'package:intl/intl.dart';
 import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
@@ -182,7 +183,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
       backgroundColor: palette.background,
       body: DuskAmbientBackground(
         child: SafeArea(
-          child: Column(
+          child: Stack(
+            children: [
+              Column(
             children: [
               // Top Bar with Circular Action
               Padding(
@@ -624,8 +627,75 @@ class _HistoryScreenState extends State<HistoryScreen> {
               ),
             ],
           ),
+          Positioned(
+                bottom: 84,
+                right: 20,
+                child: _buildGlowingAiChatButton(palette),
+              ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildGlowingAiChatButton(DuskColorPalette palette) {
+    return Semantics(
+      label: 'Chat with Dusk Buddy',
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              DuskPageRoute.modalSheet(
+                builder: (context) => const DuskChatScreen(),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(28),
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  palette.primary,
+                  palette.tertiary,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: palette.primary.withOpacity(0.45),
+                  blurRadius: 18,
+                  spreadRadius: 3,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: palette.tertiary.withOpacity(0.3),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Center(
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+            ),
+          ),
+        ),
+      ),
+    )
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .scaleXY(begin: 1.0, end: 1.06, duration: 1800.ms, curve: Curves.easeInOut)
+        .animate()
+        .fadeIn(duration: 400.ms)
+        .scale(begin: const Offset(0.8, 0.8), duration: 400.ms);
   }
 }

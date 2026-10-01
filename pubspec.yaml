@@ -60,6 +60,7 @@ dependencies:
   home_widget: ^0.10.0
   purchases_flutter: ^10.13.2
   collection: ^1.18.0
+  http: ^1.2.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

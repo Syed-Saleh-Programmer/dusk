@@ -1125,3 +1125,41 @@ Dusk is a lightweight client backed by Supabase, not a device-hosted AI system.
 No local LLM is required.
 No local AI inference is required.
 No dedicated backend server is required for the MVP beyond Supabase Edge Functions.
+
+---
+
+# 36. Dusk Buddy Subsystem Architecture
+
+```text
+┌────────────────────────────────────────────────────────┐
+│                   Dusk Buddy System                    │
+│                                                        │
+│  ┌───────────────────────┐   ┌──────────────────────┐  │
+│  │ BuddyContextService   │   │ GroqChatService      │  │
+│  │ - Second brain schema │   │ - API key management │  │
+│  │ - Ingest dumps & tasks│   │ - Ultra-fast LLM API │  │
+│  │ - Ingest past insights│   │ - Max token cap (300)│  │
+│  └───────────┬───────────┘   └──────────┬───────────┘  │
+│              │                          │              │
+│              ▼                          ▼              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ DuskChatScreen                                   │  │
+│  │ - Responsive layout (no-overflow Flexible badges)│  │
+│  │ - Unified input composer with clear & counter    │  │
+│  │ - Model picker bottom sheet                      │  │
+│  └──────────────────────────────────────────────────┘  │
+│                          ▲                             │
+│                          │                             │
+│  ┌───────────────────────┴──────────────────────────┐  │
+│  │ DuskAiRotatingGradientButton (History & Nav)     │  │
+│  │ - Smooth continuous 360° gradient rotation       │  │
+│  │ - Constant 56x56 geometry (no scale pulsing)     │  │
+│  └──────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────┘
+```
+
+### Components
+1. **`BuddyContextService`**: Builds a compact markdown snapshot of the user's latest dumps, active tasks, and reflection insights to supply as a grounded system prompt.
+2. **`GroqChatService`**: Dispatches requests directly to Groq's low-latency inference endpoint using open-weight models (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`).
+3. **`DuskAiRotatingGradientButton`**: Animated trigger utilizing Flutter's `SweepGradient` and `GradientRotation` with an `AnimationController` for steady, elegant color rotation.
+4. **`DuskChatScreen`**: Modern chat presentation layer featuring adaptive layouts, markdown formatting, model switcher, and unified input composer.

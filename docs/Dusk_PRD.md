@@ -831,3 +831,29 @@ Dusk should never feel like another application demanding attention.
 It exists to help users notice what already happened.
 
 **Capture freely. Reflect briefly. Understand more.**
+
+---
+
+# 28. Feature Specification — Dusk Buddy (Second Brain AI Companion)
+
+### 28.1 Overview
+Dusk Buddy is an intentional, privacy-first conversational companion that lets users interrogate and extract value from their accumulated second brain (dumps, tasks, and historical reflection cycles).
+
+### 28.2 Architectural Capabilities
+- **Local Context Synthesis (`BuddyContextService`)**: Ingests the user's unreflected and recent dumps, active/completed tasks, and past reflection insights into a compact system context.
+- **Strict Grounding Guardrail**: If an inquiry falls outside the scope of the user's captured second brain data, Dusk Buddy strictly replies: *"Sorry, nothing like that in your second brain."*
+- **Cloud LLM via Groq (`GroqChatService`)**: Connects to the Groq API for rapid inference (supporting `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, etc.) constrained to a maximum of 300 output tokens for concise, high-signal responses.
+- **Client-Side Key Management**: Securely stored in local preferences, preventing vendor lock-in.
+
+### 28.3 User Interface & Motion Design
+- **Floating AI Trigger Button**:
+  - Located on the Reflection Archive screen snugly above the bottom navigation bar (`bottom: 72`, `right: 16`).
+  - Constant size geometry (56×56dp) with **smooth continuous 360° gradient rotation** rather than intrusive size pulsing.
+- **Modern Input Composer**:
+  - Unified rounded container (26dp radius) with soft background tint and focus-reactive borders.
+  - Multi-line auto-expanding field (up to 4 lines) with character counter indicator (`current/300`).
+  - Integrated quick clear action and haptic feedback on send.
+  - Overflow-proof status header and dynamic brain snapshot summary pill (`Flexible` truncation).
+- **Access Points**:
+  - Reflection Archive floating button.
+  - Dedicated **Settings $\rightarrow$ Dusk Buddy & Second Brain AI** tile.

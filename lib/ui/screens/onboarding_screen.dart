@@ -46,15 +46,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       highlights: ['Custom Cadence', 'Gentle Alarm Chimes', 'Zero Guilt'],
     ),
     _OnboardingSlideData(
-      tag: 'STEP 3 • AI SYNTHESIS',
+      tag: 'STEP 3 • AI SYNTHESIS & DUSK BUDDY',
       tagVariant: DuskBadgeVariant.orange,
       tagIcon: Icons.auto_awesome_rounded,
-      title: 'Turn scattered dumps into clarity.',
+      title: 'Turn dumps into clarity & chat with Buddy.',
       subtitle:
-          'When your cycle completes, Dusk AI synthesizes your captures into themes, emotional patterns, and an Insight Card.',
+          'When your cycle completes, Dusk AI synthesizes themes and Insight Cards. Chat directly with Dusk Buddy to question your dumps and reflections.',
       accentColor: Color(0xFFE06D14),
       glowColor: Color(0xFFFCE6D2),
-      highlights: ['Cycle Summary', 'Pattern Discovery', 'Insight Cards'],
+      highlights: ['Dusk Buddy Chat', 'Cycle Summary', 'Insight Cards'],
     ),
     _OnboardingSlideData(
       tag: 'STEP 4 • TASK EXTRACTION & VAULT',
@@ -1399,10 +1399,10 @@ class _InsightMockupScreen extends StatelessWidget {
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.bolt_rounded, size: 11, color: Color(0xFFFF7A1A)),
+              Icon(Icons.auto_awesome_rounded, size: 10, color: Color(0xFFFF7A1A)),
               SizedBox(width: 4),
               Text(
-                '3 Themes Discovered • 1 Insight Distilled',
+                'Dusk Buddy AI Chat • 1 Insight Distilled',
                 style: TextStyle(
                   fontSize: 8.5,
                   fontWeight: FontWeight.w700,

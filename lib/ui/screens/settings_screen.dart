@@ -25,6 +25,7 @@ import 'permissions_settings_screen.dart';
 import 'privacy_screen.dart';
 import 'profile_setup_screen.dart';
 import 'user_profile_screen.dart';
+import 'dusk_chat_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool showBackButton;
@@ -547,7 +548,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ],
                     ),
 
-                    // SECTION 2: EVENING RITUAL
+                    // SECTION 2: DUSK BUDDY & SECOND BRAIN AI
+                    _buildSectionHeader('Dusk Buddy & Second Brain AI'),
+                    _buildCardContainer(
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.primarySoftBg,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.auto_awesome_rounded, color: p.primary, size: 20),
+                          ),
+                          title: Text(
+                            'Dusk Buddy AI Chat',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Chat with your dumps, tasks & reflections • Groq API',
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
+                          ),
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              DuskPageRoute.modalSheet(
+                                builder: (_) => const DuskChatScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+
+                    // SECTION 3: EVENING RITUAL
                     _buildSectionHeader('Evening Ritual & Alarm'),
                     _buildCardContainer(
                       children: [

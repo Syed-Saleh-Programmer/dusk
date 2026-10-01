@@ -51,10 +51,10 @@ The feature backlog below is organized into five functional pillars designed to 
    - **User Flow:** Users can view their pending gentle actions, check them off when completed, or export them with one tap to Apple Reminders, Google Tasks, Notion, or Markdown.
    - **Technical Considerations:** Relational table `reflection_actions` linked to `reflection_sessions` with sync to local database.
 
-2. **Semantic & Natural Language Search ("Ask Your Past Self")**
-   - **Description:** A private natural language query bar allowing users to search across their entire history of dumps, summaries, and insight cards.
-   - **Example Queries:** *"When was the last time I felt overwhelmed by project deadlines?"*, *"What was that book recommendation from last Tuesday?"*
-   - **Technical Considerations:** Supabase pgvector embeddings for Pro users or client-side SQLite FTS5 for fast full-text search.
+2. **Semantic & Natural Language Search ("Ask Your Past Self") / Dusk Buddy [SHIPPED - MVP+]**
+   - **Description:** A private conversational companion allowing users to interrogate their second brain across dumps, active tasks, and historical reflection cycles.
+   - **Status:** **Shipped**. Powered by Groq API (`openai/gpt-oss-120b`, `openai/gpt-oss-20b`) and grounded via `BuddyContextService`. Features rotating gradient UI floating action button, adaptive overflow-free layout, and modern multi-line composer.
+   - **Next Iteration:** Supabase pgvector embeddings for deeper hybrid vector search on very large multi-year archives.
 
 3. **Multi-Cycle Trends & "Monthly Horizon" (Macro Reflection)**
    - **Description:** An optional monthly or quarterly high-level synthesis combining insights from multiple reflection cycles.

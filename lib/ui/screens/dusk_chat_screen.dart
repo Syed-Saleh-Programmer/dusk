@@ -33,11 +33,17 @@ class _DuskChatScreenState extends State<DuskChatScreen> {
   @override
   void initState() {
     super.initState();
+    _focusNode.addListener(_onFocusChange);
     _initChat();
+  }
+
+  void _onFocusChange() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    _focusNode.removeListener(_onFocusChange);
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
@@ -380,14 +386,19 @@ class _DuskChatScreenState extends State<DuskChatScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        _selectedModel ?? GroqChatService.defaultModel,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: p.primary,
+                      Flexible(
+                        child: Text(
+                          _selectedModel ?? GroqChatService.defaultModel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: p.primary,
+                          ),
                         ),
                       ),
+                      const SizedBox(width: 2),
                       Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: p.primary),
                     ],
                   ),
@@ -414,28 +425,42 @@ class _DuskChatScreenState extends State<DuskChatScreen> {
   Widget _buildContextStatusBadge(DuskColorPalette p) {
     final meta = _contextMetadata!;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: p.surface.withOpacity(0.8),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: p.outlineVariant.withValues(alpha: 0.6)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.auto_awesome_rounded, size: 13, color: p.primary),
-            const SizedBox(width: 6),
-            Text(
-              'Brain Snapshot: ${meta.summaryLabel}',
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: p.onSurface.withOpacity(0.75),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 420),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: p.surface.withValues(alpha: 0.88),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: p.outlineVariant.withValues(alpha: 0.6)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.auto_awesome_rounded, size: 13, color: p.primary),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Brain Snapshot: ${meta.summaryLabel}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: p.onSurface.withValues(alpha: 0.8),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -744,124 +769,175 @@ class _DuskChatScreenState extends State<DuskChatScreen> {
 
   Widget _buildInputBar(DuskColorPalette p) {
     final currentLength = _textController.text.length;
+    final hasText = _textController.text.trim().isNotEmpty;
+    final canSend = hasText && !_isGenerating;
+    final isNearLimit = currentLength >= maxInputLength - 30;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
         color: p.surface,
         border: Border(
-          top: BorderSide(color: p.outlineVariant.withOpacity(0.5)),
+          top: BorderSide(
+            color: p.outlineVariant.withValues(alpha: 0.5),
+            width: 1,
+          ),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: p.surfaceVariant,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: p.outlineVariant.withValues(alpha: 0.6)),
+        child: Container(
+          decoration: BoxDecoration(
+            color: p.surfaceVariant.withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: _focusNode.hasFocus
+                  ? p.primary.withValues(alpha: 0.6)
+                  : p.outlineVariant.withValues(alpha: 0.6),
+              width: _focusNode.hasFocus ? 1.5 : 1.0,
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 4, 6, 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _textController,
+                  focusNode: _focusNode,
+                  maxLength: maxInputLength,
+                  maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                  maxLines: 4,
+                  minLines: 1,
+                  onChanged: (_) => setState(() {}),
+                  onSubmitted: (_) => _sendMessage(),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14.5,
+                    color: p.onSurface,
+                    height: 1.35,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Ask about dumps, tasks, reflections...',
+                    hintStyle: TextStyle(
+                      fontSize: 13.5,
+                      color: p.onSurface.withValues(alpha: 0.4),
+                      fontWeight: FontWeight.w400,
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _textController,
-                            focusNode: _focusNode,
-                            maxLength: maxInputLength,
-                            maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                            maxLines: 4,
-                            minLines: 1,
-                            onChanged: (_) => setState(() {}),
-                            onSubmitted: (_) => _sendMessage(),
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 14,
-                              color: p.onSurface,
-                            ),
-                            decoration: const InputDecoration(
-                              hintText: 'Ask about dumps, tasks, reflections...',
-                              hintStyle: TextStyle(
-                                fontSize: 13.5,
-                                color: Color(0xFFA59F95),
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                              counterText: '', // We display custom counter below
-                              contentPadding: EdgeInsets.symmetric(vertical: 8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    border: InputBorder.none,
+                    isDense: true,
+                    counterText: '',
+                    contentPadding: const EdgeInsets.symmetric(vertical: 9),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(24),
-                    onTap: (_textController.text.trim().isEmpty || _isGenerating)
-                        ? null
-                        : () => _sendMessage(),
+              ),
+              if (hasText) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8, right: 4),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      _textController.clear();
+                      setState(() {});
+                    },
                     child: Container(
-                      width: 44,
-                      height: 44,
+                      padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
+                        color: p.onSurface.withValues(alpha: 0.08),
                         shape: BoxShape.circle,
-                        gradient: LinearGradient(
-                          colors: (_textController.text.trim().isNotEmpty && !_isGenerating)
-                              ? [p.primary, p.tertiary]
-                              : [p.onSurface.withOpacity(0.2), p.onSurface.withOpacity(0.3)],
-                        ),
-                        boxShadow: (_textController.text.trim().isNotEmpty && !_isGenerating)
-                            ? [
-                                BoxShadow(
-                                  color: p.primary.withOpacity(0.35),
-                                  blurRadius: 10,
-                                  spreadRadius: 1,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ]
-                            : null,
                       ),
-                      child: const Icon(
-                        Icons.arrow_upward_rounded,
-                        color: Colors.white,
-                        size: 22,
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 13,
+                        color: p.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 4),
-            // Character counter displayed: X / 300
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '$currentLength / $maxInputLength',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: currentLength >= maxInputLength
-                        ? Colors.red
-                        : p.onSurface.withOpacity(0.4),
+              if (currentLength > 0) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 9, right: 6),
+                  child: Text(
+                    '$currentLength/$maxInputLength',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: isNearLimit
+                          ? (currentLength >= maxInputLength ? Colors.red : Colors.orange)
+                          : p.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+              ],
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: canSend
+                        ? () {
+                            HapticFeedback.lightImpact();
+                            _sendMessage();
+                          }
+                        : null,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: canSend
+                            ? LinearGradient(
+                                colors: [p.primary, p.tertiary],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              )
+                            : null,
+                        color: canSend
+                            ? null
+                            : p.onSurface.withValues(alpha: 0.08),
+                        boxShadow: canSend
+                            ? [
+                                BoxShadow(
+                                  color: p.primary.withValues(alpha: 0.35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Center(
+                        child: _isGenerating
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(p.primary),
+                                ),
+                              )
+                            : Icon(
+                                Icons.arrow_upward_rounded,
+                                color: canSend
+                                    ? Colors.white
+                                    : p.onSurface.withValues(alpha: 0.3),
+                                size: 20,
+                              ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

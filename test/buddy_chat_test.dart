@@ -1,7 +1,10 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:dusk/models/chat_message.dart';
 import 'package:dusk/services/buddy_context_service.dart';
 import 'package:dusk/services/groq_chat_service.dart';
+import 'package:dusk/ui/screens/history_screen.dart';
+import 'package:dusk/ui/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -129,6 +132,47 @@ void main() {
 
       await service.setSelectedModel('openai/gpt-oss-20b');
       expect(await service.getSelectedModel(), 'openai/gpt-oss-20b');
+    });
+  });
+
+  group('DuskAiRotatingGradientButton Widget Tests', () {
+    testWidgets('renders rotating gradient button with constant 56x56 size', (tester) async {
+      bool tapped = false;
+      const palette = DuskColorPalette.duskSunset;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DuskAiRotatingGradientButton(
+              palette: palette,
+              size: 56.0,
+              animateRotation: false,
+              onTap: () => tapped = true,
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Verify widget exists
+      final buttonFinder = find.byType(DuskAiRotatingGradientButton);
+      expect(buttonFinder, findsOneWidget);
+
+      // Verify auto_awesome icon is rendered
+      expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
+
+      // Verify tap works
+      await tester.tap(buttonFinder);
+      await tester.pump();
+      expect(tapped, isTrue);
+
+      // Verify constant size (does not pulse or distort)
+      final size = tester.getSize(buttonFinder);
+      expect(size.width, 56.0);
+      expect(size.height, 56.0);
+
+      // Cleanly dispose repeating animation controller
+      await tester.pumpWidget(const SizedBox());
     });
   });
 }

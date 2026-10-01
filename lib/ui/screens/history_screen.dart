@@ -1,4 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_state.dart';
@@ -628,18 +630,73 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ],
           ),
           Positioned(
-                bottom: 84,
-                right: 20,
-                child: _buildGlowingAiChatButton(palette),
-              ),
-            ],
+            bottom: 72,
+            right: 16,
+            child: DuskAiRotatingGradientButton(
+              palette: palette,
+              onTap: () {
+                Navigator.of(context).push(
+                  DuskPageRoute.modalSheet(
+                    builder: (context) => const DuskChatScreen(),
+                  ),
+                );
+              },
+            ),
           ),
-        ),
+        ],
       ),
+    ),
+  ),
+);
+  }
+}
+
+/// A floating AI trigger button that keeps its size constant and smoothly
+/// rotates its gradient colors continuously.
+class DuskAiRotatingGradientButton extends StatefulWidget {
+  final DuskColorPalette palette;
+  final VoidCallback onTap;
+  final double size;
+  final bool animateRotation;
+
+  const DuskAiRotatingGradientButton({
+    super.key,
+    required this.palette,
+    required this.onTap,
+    this.size = 56.0,
+    this.animateRotation = true,
+  });
+
+  @override
+  State<DuskAiRotatingGradientButton> createState() =>
+      _DuskAiRotatingGradientButtonState();
+}
+
+class _DuskAiRotatingGradientButtonState
+    extends State<DuskAiRotatingGradientButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _rotationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _rotationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3600),
     );
+    if (widget.animateRotation) {
+      _rotationController.repeat();
+    }
   }
 
-  Widget _buildGlowingAiChatButton(DuskColorPalette palette) {
+  @override
+  void dispose() {
+    _rotationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Semantics(
       label: 'Chat with Dusk Buddy',
       button: true,
@@ -647,40 +704,45 @@ class _HistoryScreenState extends State<HistoryScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            Navigator.of(context).push(
-              DuskPageRoute.modalSheet(
-                builder: (context) => const DuskChatScreen(),
-              ),
-            );
+            HapticFeedback.lightImpact();
+            widget.onTap();
           },
-          borderRadius: BorderRadius.circular(28),
-          child: Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [
-                  palette.primary,
-                  palette.tertiary,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: palette.primary.withOpacity(0.45),
-                  blurRadius: 18,
-                  spreadRadius: 3,
-                  offset: const Offset(0, 4),
+          borderRadius: BorderRadius.circular(widget.size / 2),
+          child: AnimatedBuilder(
+            animation: _rotationController,
+            builder: (context, child) {
+              final angle = _rotationController.value * 2 * math.pi;
+              return Container(
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: SweepGradient(
+                    colors: [
+                      widget.palette.primary,
+                      widget.palette.tertiary,
+                      const Color(0xFF68B06D),
+                      widget.palette.primary,
+                    ],
+                    transform: GradientRotation(angle),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.palette.primary.withValues(alpha: 0.38),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 4),
+                    ),
+                    BoxShadow(
+                      color: widget.palette.tertiary.withValues(alpha: 0.25),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
                 ),
-                BoxShadow(
-                  color: palette.tertiary.withOpacity(0.3),
-                  blurRadius: 10,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
+                child: child,
+              );
+            },
             child: const Center(
               child: Icon(
                 Icons.auto_awesome_rounded,
@@ -691,11 +753,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ),
       ),
-    )
-        .animate(onPlay: (c) => c.repeat(reverse: true))
-        .scaleXY(begin: 1.0, end: 1.06, duration: 1800.ms, curve: Curves.easeInOut)
-        .animate()
-        .fadeIn(duration: 400.ms)
-        .scale(begin: const Offset(0.8, 0.8), duration: 400.ms);
+    ).animate().fadeIn(duration: 350.ms);
   }
 }

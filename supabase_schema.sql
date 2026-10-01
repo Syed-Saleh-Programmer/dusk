@@ -43,11 +43,13 @@ CREATE TABLE dumps (
     transcript TEXT,
     media_url TEXT,
     category TEXT,
+    tags TEXT[] DEFAULT '{}',
     captured_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     sync_status TEXT DEFAULT 'synced',
     ai_summary TEXT
 );
+ALTER TABLE dumps ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
 ALTER TABLE dumps ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own dumps" ON dumps FOR ALL USING (auth.uid() = user_id);
 
@@ -121,6 +123,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     title TEXT NOT NULL,
     source_type TEXT NOT NULL DEFAULT 'dump',
     source_label TEXT,
+    tags TEXT[] DEFAULT '{}',
     status TEXT NOT NULL DEFAULT 'pending',
     due_date TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -129,9 +132,35 @@ CREATE TABLE IF NOT EXISTS tasks (
     sync_status TEXT DEFAULT 'synced'
 );
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TIMESTAMPTZ;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own tasks" ON tasks FOR ALL USING (auth.uid() = user_id);
 
 -- Create Storage Bucket
 INSERT INTO storage.buckets (id, name, public) VALUES ('user-media', 'user-media', false);
 CREATE POLICY "Users can manage their own media" ON storage.objects FOR ALL USING (auth.uid() = owner);
+
+-- 9. projects (Spaces / Focus Areas)
+CREATE TABLE IF NOT EXISTS projects (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    description TEXT,
+    icon TEXT DEFAULT '📁',
+    color_value BIGINT DEFAULT 4284704497, -- 0xFF6366F1
+    is_archived BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    sync_status TEXT DEFAULT 'synced'
+);
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own projects" ON projects FOR ALL USING (auth.uid() = user_id);
+
+-- Foreign keys & indices on dumps and tasks
+ALTER TABLE dumps ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_dumps_project_id ON dumps(project_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
+

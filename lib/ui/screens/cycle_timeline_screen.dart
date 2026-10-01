@@ -7,6 +7,7 @@ import 'reflection_ready_screen.dart';
 import 'dump_detail_screen.dart';
 import '../widgets/dusk_ui_components.dart';
 import '../widgets/capture_speed_dial.dart';
+import '../navigation/dusk_navigation.dart';
 
 class CycleTimelineScreen extends StatefulWidget {
   final String? cycleId;
@@ -30,24 +31,25 @@ class _CycleTimelineScreenState extends State<CycleTimelineScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     DuskCircleButton(
                       icon: Icons.arrow_back_ios_new_rounded,
-                      size: 42,
-                      iconSize: 18,
+                      size: 38,
+                      iconSize: 17,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    const Text(
-                      'Cycle Timeline',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B1A19),
-                        letterSpacing: -0.2,
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        'Cycle Timeline',
+                        style: TextStyle(
+                          fontSize: 17.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B1A19),
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 42),
                   ],
                 ),
               ),
@@ -158,7 +160,7 @@ class _CycleTimelineScreenState extends State<CycleTimelineScreen> {
                                 final activeCycleId = widget.cycleId ?? cycle?.id ?? '';
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  DuskPageRoute.ritual(
                                     builder: (_) => ReflectionReadyScreen(cycleId: activeCycleId),
                                   ),
                                 );
@@ -345,7 +347,7 @@ class _CycleTimelineScreenState extends State<CycleTimelineScreen> {
               child: GestureDetector(
                 onTap: () {
                   Navigator.of(context).push(
-                    MaterialPageRoute(
+                    DuskPageRoute.perspectiveSlide(
                       builder: (_) => DumpDetailScreen(dump: dump),
                     ),
                   );
@@ -370,38 +372,55 @@ class _CycleTimelineScreenState extends State<CycleTimelineScreen> {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            type.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: iconColor,
-                              letterSpacing: 0.8,
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    type.toUpperCase(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: iconColor,
+                                      letterSpacing: 0.8,
+                                    ),
+                                  ),
+                                ),
+                                if (isProcessing) ...[
+                                  const SizedBox(width: 8),
+                                  const SizedBox(
+                                    width: 10,
+                                    height: 10,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF7A1A)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Flexible(
+                                    child: Text(
+                                      'Refining...',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFFFF7A1A),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ),
-                          if (isProcessing) ...[
-                            const SizedBox(width: 8),
-                            const SizedBox(
-                              width: 10,
-                              height: 10,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF7A1A)),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Text(
-                              'Refining...',
-                              style: TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFFFF7A1A),
-                              ),
-                            ),
-                          ],
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           Text(
                             time,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 11.5,
                               color: Color(0xFF88827A),

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
+import '../../providers/app_state.dart';
+import '../../services/local_db_service.dart';
 import '../../services/supabase_service.dart';
 import 'past_reflection_screen.dart';
 import 'paywall_screen.dart';
 import 'share_insight_screen.dart';
 import 'package:intl/intl.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -38,20 +42,51 @@ class _HistoryScreenState extends State<HistoryScreen> {
     super.dispose();
   }
 
+  int _archivedPastLimitCount = 0;
+
   Future<void> _fetchInsights() async {
     try {
-      final list = await _supabase.getInsightCards();
-      setState(() {
-        _allInsights = list;
-        _isLoading = false;
-        _applyFilters();
-      });
+      final appState = Provider.of<AppState>(context, listen: false);
+      final currentUserId = _supabase.currentUser?.id ?? 'local_user';
+
+      // 1. Instantly load local insight cards from SQLite (works 100% offline for Free tier)
+      final localCards = await LocalDbService().getLocalInsightCards(userId: currentUserId);
+
+      // 2. If Pro and user has an account, sync remote cards from Supabase
+      List<Map<String, dynamic>> combined = List.from(localCards);
+      if (appState.isPro && _supabase.currentUser != null) {
+        try {
+          final remoteCards = await _supabase.getInsightCards();
+          final localIds = localCards.map((c) => c['id'].toString()).toSet();
+          for (final remote in remoteCards) {
+            if (!localIds.contains(remote['id'].toString())) {
+              combined.add(remote);
+              await LocalDbService().insertLocalInsightCard(remote);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error syncing remote insight cards: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _allInsights = combined;
+          _isLoading = false;
+          _applyFilters();
+        });
+      }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _applyFilters() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    final isPro = appState.isPro;
+    final now = DateTime.now();
+    final cutoff14Days = now.subtract(const Duration(days: 14));
+
     List<Map<String, dynamic>> temp = List.from(_allInsights);
 
     if (_searchQuery.isNotEmpty) {
@@ -63,7 +98,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
 
     if (_selectedFilterIndex == 1) {
-      final oneMonthAgo = DateTime.now().subtract(const Duration(days: 30));
+      final oneMonthAgo = now.subtract(const Duration(days: 30));
       temp = temp.where((insight) {
         final createdAtStr = insight['created_at'] as String?;
         if (createdAtStr == null) return false;
@@ -78,9 +113,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
       temp = temp.where((insight) => (insight['is_bookmarked'] as bool?) == true).toList();
     }
 
-    setState(() {
+    // Free Tier: rolling 14-day history window
+    if (!isPro) {
+      final within14 = <Map<String, dynamic>>[];
+      int olderCount = 0;
+      for (final item in temp) {
+        final createdAtStr = item['created_at']?.toString();
+        if (createdAtStr != null) {
+          try {
+            final dt = DateTime.parse(createdAtStr);
+            if (dt.isAfter(cutoff14Days)) {
+              within14.add(item);
+            } else {
+              olderCount++;
+            }
+          } catch (_) {
+            within14.add(item);
+          }
+        } else {
+          within14.add(item);
+        }
+      }
+      _filteredInsights = within14;
+      _archivedPastLimitCount = olderCount;
+    } else {
       _filteredInsights = temp;
-    });
+      _archivedPastLimitCount = 0;
+    }
+
+    setState(() {});
   }
 
   void _toggleBookmark(Map<String, dynamic> insight) {
@@ -116,8 +177,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppTheme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: palette.background,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: Column(
@@ -176,15 +238,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
-                        borderSide: const BorderSide(color: Color(0xFFECE7DE)),
+                        borderSide: BorderSide(color: palette.outlineVariant),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
-                        borderSide: const BorderSide(color: Color(0xFFECE7DE)),
+                        borderSide: BorderSide(color: palette.outlineVariant),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
-                        borderSide: const BorderSide(color: Color(0xFFFF7A1A), width: 1.5),
+                        borderSide: BorderSide(color: palette.primary, width: 1.5),
                       ),
                     ),
                     onChanged: (val) {
@@ -195,37 +257,71 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ).animate().fadeIn(duration: 200.ms).slideY(begin: -0.1),
 
               // Pro Entitlement Banner
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
-                },
-                child: Container(
+              if (context.watch<AppState>().isPro)
+                Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFDE8D7).withValues(alpha: 0.5),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFFF7A1A).withValues(alpha: 0.2)),
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF81C784).withValues(alpha: 0.5)),
                   ),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.auto_awesome_rounded, size: 18, color: Color(0xFFFF7A1A)),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.all_inclusive_rounded, size: 18, color: Color(0xFF2E7D32)),
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Free tier includes past 7 days. Upgrade to Pro for complete archive.',
+                          'Dusk Vault Active • Unlimited lifetime reflection archive',
                           style: TextStyle(
                             fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1B1A19),
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF1B5E20),
                           ),
                         ),
                       ),
-                      Icon(Icons.chevron_right_rounded, size: 20, color: Color(0xFFFF7A1A)),
                     ],
                   ),
-                ),
-              ).animate().fadeIn(duration: 300.ms),
+                ).animate().fadeIn(duration: 300.ms)
+              else
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      DuskPageRoute.modalSheet(
+                        builder: (_) => const PaywallScreen(),
+                      ),
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: palette.primaryContainer.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: palette.primary.withValues(alpha: 0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.lock_clock_rounded, size: 18, color: palette.primary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _archivedPastLimitCount > 0
+                                ? 'Showing rolling 14 days ($_archivedPastLimitCount archived in Vault). Tap to unlock.'
+                                : 'Free tier displays rolling 14 days. Upgrade to Pro for lifetime archive.',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF1B1A19),
+                            ),
+                          ),
+                        ),
+                        Icon(Icons.chevron_right_rounded, size: 20, color: palette.primary),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn(duration: 300.ms),
 
               const SizedBox(height: 10),
 
@@ -249,14 +345,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
               // Archive List
               Expanded(
                 child: RefreshIndicator(
-                  color: const Color(0xFFFF7A1A),
+                  color: palette.primary,
                   backgroundColor: Colors.white,
                   displacement: 24,
                   onRefresh: _fetchInsights,
                   child: _isLoading
-                      ? const Center(
+                      ? Center(
                           child: CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF7A1A)),
+                            valueColor: AlwaysStoppedAnimation<Color>(palette.primary),
                           ),
                         )
                       : _allInsights.isEmpty
@@ -304,8 +400,88 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               : ListView.builder(
                                   physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
                                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 110),
-                                  itemCount: _filteredInsights.length,
+                                  itemCount: _filteredInsights.length + (!context.watch<AppState>().isPro ? 1 : 0),
                                   itemBuilder: (context, index) {
+                                    if (index == _filteredInsights.length) {
+                                      return Container(
+                                        margin: const EdgeInsets.only(top: 8, bottom: 20),
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFBF9F5),
+                                          borderRadius: BorderRadius.circular(22),
+                                          border: Border.all(
+                                            color: const Color(0xFFFFB27A).withValues(alpha: 0.6),
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.all(8),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFFDE8D7),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.lock_rounded,
+                                                    color: Color(0xFFFF7A1A),
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      const Text(
+                                                        'Dusk Vault (14-Day Limit)',
+                                                        style: TextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight: FontWeight.w800,
+                                                          color: Color(0xFF1B1A19),
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        _archivedPastLimitCount > 0
+                                                            ? '$_archivedPastLimitCount older reflection(s) preserved in Vault'
+                                                            : 'Older reflections are archived here',
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          color: Color(0xFF88827A),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 12),
+                                            const Text(
+                                              'Free tier displays your most recent 14 days of reflections. Upgrade to Dusk Pro to unlock lifetime archive access, full-history search, and cross-device cloud sync.',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Color(0xFF6E6862),
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            DuskPrimaryButton(
+                                              label: 'Unlock Full Archive with Pro',
+                                              icon: Icons.auto_awesome_rounded,
+                                              onPressed: () {
+                                                Navigator.of(context).push(
+                                                  DuskPageRoute.modalSheet(builder: (_) => const PaywallScreen()),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ).animate().fadeIn(duration: 400.ms);
+                                    }
+
                                     final insight = _filteredInsights[index];
                                     final isBookmarked = (insight['is_bookmarked'] as bool?) == true;
 
@@ -320,7 +496,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     return GestureDetector(
                                       onTap: () {
                                         Navigator.of(context).push(
-                                          MaterialPageRoute(
+                                          DuskPageRoute.perspectiveSlide(
                                             builder: (_) => PastReflectionScreen(insight: insight),
                                           ),
                                         );
@@ -338,7 +514,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                               offset: const Offset(0, 3),
                                             ),
                                           ],
-                                          border: Border.all(color: const Color(0xFFF0EBE1)),
+                                          border: Border.all(color: palette.outlineVariant),
                                         ),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,7 +537,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                       behavior: HitTestBehavior.opaque,
                                                       onTap: () {
                                                         Navigator.of(context).push(
-                                                          MaterialPageRoute(
+                                                          DuskPageRoute.modalSheet(
                                                             builder: (_) => ShareInsightScreen(insight: insight),
                                                           ),
                                                         );
@@ -385,7 +561,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                           isBookmarked ? Icons.star_rounded : Icons.star_outline_rounded,
                                                           size: 22,
                                                           color: isBookmarked
-                                                              ? const Color(0xFFFF7A1A)
+                                                              ? palette.primary
                                                               : const Color(0xFFBEB7AC),
                                                         ),
                                                       ),
@@ -417,7 +593,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                             const SizedBox(height: 14),
                                             Row(
                                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: const [
+                                              children: [
                                                 Expanded(
                                                   child: Text(
                                                     'View synthesized report',
@@ -426,15 +602,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                                     style: TextStyle(
                                                       fontSize: 12.5,
                                                       fontWeight: FontWeight.w600,
-                                                      color: Color(0xFFFF7A1A),
+                                                      color: palette.primary,
                                                     ),
                                                   ),
                                                 ),
-                                                SizedBox(width: 8),
+                                                const SizedBox(width: 8),
                                                 DuskSegmentedDashes(
                                                   totalSegments: 3,
                                                   completedSegments: 3,
-                                                  activeColor: Color(0xFF389F7F),
+                                                  activeColor: palette.tertiary,
                                                 ),
                                               ],
                                             ),

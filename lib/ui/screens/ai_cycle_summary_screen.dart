@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../services/reflection_service.dart';
 import '../../models/reflection_session.dart';
 import 'reflection_flow_screen.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
 
 class AiCycleSummaryScreen extends StatefulWidget {
@@ -52,8 +53,10 @@ class _AiCycleSummaryScreenState extends State<AiCycleSummaryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppTheme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: p.background,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: _isLoading
@@ -61,21 +64,21 @@ class _AiCycleSummaryScreenState extends State<AiCycleSummaryScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 36,
                         height: 36,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF7A1A)),
+                          valueColor: AlwaysStoppedAnimation<Color>(p.primary),
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Text(
+                      Text(
                         "Synthesizing your daily captures...",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF1B1A19),
+                          color: p.onSurface,
                         ),
                       ).animate(onPlay: (c) => c.repeat(reverse: true)).fade(begin: 0.5, end: 1.0),
                     ],
@@ -88,16 +91,16 @@ class _AiCycleSummaryScreenState extends State<AiCycleSummaryScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline_rounded, size: 48, color: Color(0xFFFF7A1A)),
+                            Icon(Icons.error_outline_rounded, size: 48, color: p.primary),
                             const SizedBox(height: 16),
-                            const Text(
+                            Text(
                               "Could not synthesize reflection",
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1B1A19)),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: p.onSurface),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               _error!,
-                              style: const TextStyle(fontSize: 13, color: Color(0xFF8E8880)),
+                              style: TextStyle(fontSize: 13, color: p.onSurfaceVariant),
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 24),
@@ -112,8 +115,8 @@ class _AiCycleSummaryScreenState extends State<AiCycleSummaryScreen> {
                                 ElevatedButton(
                                   onPressed: _fetchSummary,
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFFF7A1A),
-                                    foregroundColor: Colors.white,
+                                    backgroundColor: p.primary,
+                                    foregroundColor: p.onPrimary,
                                   ),
                                   child: const Text("Retry"),
                                 ),
@@ -145,60 +148,61 @@ class _AiCycleSummaryScreenState extends State<AiCycleSummaryScreen> {
                             ],
                           ),
                           const SizedBox(height: 20),
-                          const Text(
+                          Text(
                             "Here is what defined your day.",
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF1B1A19),
+                              color: p.onSurface,
                               letterSpacing: -0.3,
                             ),
                           ).animate().fade().slideY(begin: -0.1),
                           const SizedBox(height: 8),
-                          const Text(
+                          Text(
                             "AI synthesis of your thoughts, voice memos, and moments.",
                             style: TextStyle(
                               fontSize: 14,
-                              color: Color(0xFF6E6862),
+                              color: p.onSurfaceVariant,
                             ),
                           ).animate().fade(delay: 100.ms),
                           const SizedBox(height: 20),
                           
                           Expanded(
-                            child: SingleChildScrollView(
-                              physics: const BouncingScrollPhysics(),
-                              child: Container(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: p.surface,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: p.outline),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.03),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: SingleChildScrollView(
+                                physics: const BouncingScrollPhysics(),
                                 padding: const EdgeInsets.all(22),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(24),
-                                  border: Border.all(color: const Color(0xFFF0EBE1)),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.03),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
                                 child: MarkdownBody(
                                   data: _session?.generatedSummary?.trim().isNotEmpty == true 
                                     ? _session!.generatedSummary! 
                                     : "Take a quiet moment to look back on your day and center your thoughts before tomorrow.",
                                   styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                                    p: const TextStyle(
+                                    p: TextStyle(
                                       fontSize: 16,
-                                      color: Color(0xFF2C2825),
+                                      color: p.onSurface,
                                       height: 1.65,
                                     ),
-                                    strong: const TextStyle(
+                                    strong: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: Color(0xFF1B1A19),
+                                      color: p.onSurface,
                                     ),
                                   ),
                                 ),
-                              ).animate().fade(delay: 200.ms).slideY(begin: 0.05),
-                            ),
+                              ),
+                            ).animate().fade(delay: 200.ms).slideY(begin: 0.05),
                           ),
                           
                           const SizedBox(height: 20),
@@ -209,7 +213,7 @@ class _AiCycleSummaryScreenState extends State<AiCycleSummaryScreen> {
                               if (_session != null) {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(
+                                  DuskPageRoute.ritual(
                                     builder: (_) => ReflectionFlowScreen(
                                       session: _session!,
                                       cycleId: widget.cycleId,

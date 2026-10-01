@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dump.dart';
 
 enum TaskSourceType { dump, insight, manual }
@@ -9,9 +10,11 @@ class TaskItem {
   final String userId;
   final String? dumpId;
   final String? insightCardId;
+  final String? projectId;
   final String title;
   final TaskSourceType sourceType;
   final String? sourceLabel;
+  final List<String> tags;
   final TaskStatus status;
   final DateTime? dueDate;
   final DateTime createdAt;
@@ -24,16 +27,19 @@ class TaskItem {
     required this.userId,
     this.dumpId,
     this.insightCardId,
+    this.projectId,
     required this.title,
     this.sourceType = TaskSourceType.dump,
     this.sourceLabel,
+    List<String> tags = const [],
     this.status = TaskStatus.pending,
     this.dueDate,
     required this.createdAt,
     this.completedAt,
     DateTime? updatedAt,
     this.syncStatus = SyncStatus.pending,
-  }) : updatedAt = updatedAt ?? createdAt;
+  })  : tags = Dump.parseTags(tags),
+        updatedAt = updatedAt ?? createdAt;
 
   bool get isDone => status == TaskStatus.done;
   bool get isArchived => status == TaskStatus.archived;
@@ -63,9 +69,12 @@ class TaskItem {
     String? userId,
     String? dumpId,
     String? insightCardId,
+    String? projectId,
+    bool clearProjectId = false,
     String? title,
     TaskSourceType? sourceType,
     String? sourceLabel,
+    List<String>? tags,
     TaskStatus? status,
     DateTime? dueDate,
     bool clearDueDate = false,
@@ -80,9 +89,11 @@ class TaskItem {
       userId: userId ?? this.userId,
       dumpId: dumpId ?? this.dumpId,
       insightCardId: insightCardId ?? this.insightCardId,
+      projectId: clearProjectId ? null : (projectId ?? this.projectId),
       title: title ?? this.title,
       sourceType: sourceType ?? this.sourceType,
       sourceLabel: sourceLabel ?? this.sourceLabel,
+      tags: tags ?? this.tags,
       status: status ?? this.status,
       dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
       createdAt: createdAt ?? this.createdAt,
@@ -127,9 +138,11 @@ class TaskItem {
       userId: map['user_id']?.toString() ?? '',
       dumpId: map['dump_id']?.toString(),
       insightCardId: map['insight_card_id']?.toString(),
+      projectId: map['project_id']?.toString(),
       title: map['title']?.toString() ?? '',
       sourceType: sourceType,
       sourceLabel: map['source_label']?.toString(),
+      tags: Dump.parseTags(map['tags']),
       status: status,
       dueDate: dueDate,
       createdAt: createdAt,
@@ -145,9 +158,11 @@ class TaskItem {
       'user_id': userId,
       'dump_id': dumpId,
       'insight_card_id': insightCardId,
+      'project_id': projectId,
       'title': title,
       'source_type': sourceType.name,
       'source_label': sourceLabel,
+      'tags': tags,
       'status': status.name,
       'due_date': dueDate?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
@@ -157,6 +172,12 @@ class TaskItem {
     };
   }
 
+  Map<String, dynamic> toSqliteMap() {
+    final map = toMap();
+    map['tags'] = jsonEncode(tags);
+    return map;
+  }
+
   Map<String, dynamic> toSupabaseMap() {
     return {
       'id': id,
@@ -164,10 +185,12 @@ class TaskItem {
       if (dumpId != null && dumpId!.isNotEmpty) 'dump_id': dumpId,
       if (insightCardId != null && insightCardId!.isNotEmpty)
         'insight_card_id': insightCardId,
+      if (projectId != null && projectId!.isNotEmpty) 'project_id': projectId,
       'title': title,
       'source_type': sourceType.name,
       if (sourceLabel != null && sourceLabel!.isNotEmpty)
         'source_label': sourceLabel,
+      'tags': tags,
       'status': status.name,
       'due_date': dueDate?.toUtc().toIso8601String(),
       'created_at': createdAt.toUtc().toIso8601String(),

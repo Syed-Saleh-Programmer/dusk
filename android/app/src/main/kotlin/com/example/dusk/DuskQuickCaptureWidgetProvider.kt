@@ -17,15 +17,29 @@ class DuskQuickCaptureWidgetProvider : HomeWidgetProvider() {
     ) {
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.dusk_quick_capture_widget).apply {
-                val dumpCount = widgetData.getInt("dump_count", 0)
-                val statusText = if (dumpCount > 0) {
-                    "$dumpCount capture${if (dumpCount == 1) "" else "s"} today"
+                val todayCount = widgetData.getInt("today_count", widgetData.getInt("dump_count", 0))
+                val totalCount = widgetData.getInt("total_count", todayCount)
+                val peakPeriod = widgetData.getString("peak_period", "Evening") ?: "Evening"
+
+                val badgeText = "$todayCount Today"
+                val statusText = if (totalCount > 0) {
+                    "$totalCount total • Peak in $peakPeriod"
                 } else {
-                    "Tap to capture freely"
+                    "Mindful quick capture"
                 }
+
+                setTextViewText(R.id.tv_widget_today_badge, badgeText)
                 setTextViewText(R.id.tv_widget_cycle_status, statusText)
 
-                // 1. Text Capture Pending Intent
+                // Header tap -> Open Dusk Home
+                val homeIntent = HomeWidgetLaunchIntent.getActivity(
+                    context,
+                    MainActivity::class.java,
+                    Uri.parse("dusk://home/open")
+                )
+                setOnClickPendingIntent(R.id.widget_header_row, homeIntent)
+
+                // 1. Thought (Text) Capture Pending Intent
                 val textIntent = HomeWidgetLaunchIntent.getActivity(
                     context,
                     MainActivity::class.java,

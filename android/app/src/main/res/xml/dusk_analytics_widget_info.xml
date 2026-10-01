@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="170dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="140dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/dusk_analytics_widget"
+    android:previewLayout="@layout/dusk_analytics_widget"
+    android:description="@string/widget_analytics_desc"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_state.dart';
 import '../../services/supabase_service.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../navigation/dusk_navigation.dart';
 import 'reflection_schedule_setup_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
@@ -250,7 +251,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         Navigator.of(context).pop();
       } else {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
+          DuskPageRoute.flowProgression(
             builder: (_) => const ReflectionScheduleSetupScreen(),
           ),
         );

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -7,9 +8,12 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import '../main.dart';
 import '../models/alarm_sound.dart';
+import '../models/reflection_ritual.dart';
 import '../ui/screens/alarm_screen.dart';
+import '../ui/navigation/dusk_navigation.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
+import 'subscription_service.dart';
 import 'supabase_service.dart';
 
 /// Top-level background action handler for notification action buttons
@@ -150,7 +154,7 @@ class NotificationService {
       debugPrint('🚀 Navigating to AlarmScreen with cycleId: $realCycleId');
       // Push alarm screen on top of whatever is currently showing
       navigatorKey.currentState!.push(
-        MaterialPageRoute(
+        DuskPageRoute.vertical3D(
           builder: (_) => AlarmScreen(cycleId: realCycleId),
         ),
       );
@@ -173,36 +177,11 @@ class NotificationService {
   // Scheduling
   // ---------------------------------------------------------------------------
 
-  /// Schedules a one-shot alarm for the next reflection time based on cadence.
-  Future<void> scheduleReflectionReminder(DateTime scheduledTime, String cycleId) async {
-    // Cancel any previous alarm so we don't stack duplicates
-    await _flutterLocalNotificationsPlugin.cancelAll();
-
-    final now = tz.TZDateTime.now(tz.local);
-
-    // Build the TZDateTime explicitly using the date & time parts in local timezone
-    var scheduledTZ = tz.TZDateTime(
-      tz.local,
-      scheduledTime.year,
-      scheduledTime.month,
-      scheduledTime.day,
-      scheduledTime.hour,
-      scheduledTime.minute,
-      scheduledTime.second,
-    );
-
-    // If the scheduled time is in the past, push it to tomorrow
-    if (scheduledTZ.isBefore(now)) {
-      debugPrint('⚠️ Scheduled time $scheduledTZ is before now $now. Adding 1 day...');
-      scheduledTZ = scheduledTZ.add(const Duration(days: 1));
-    }
-
+  Future<NotificationDetails> _buildNotificationDetails() async {
     final selectedSound = await AlarmSound.loadSelected();
-
-    // FLAG_INSISTENT = 4: repeats the alarm audio in a continuous loop until handled
     final Int32List additionalFlags = Int32List.fromList(<int>[4]);
 
-    final notificationDetails = NotificationDetails(
+    return NotificationDetails(
       android: AndroidNotificationDetails(
         selectedSound.channelId,
         'Reflection Alarms (${selectedSound.name})',
@@ -249,44 +228,120 @@ class NotificationService {
         interruptionLevel: InterruptionLevel.timeSensitive,
       ),
     );
+  }
+
+  Future<void> _scheduleAlarmEntry({
+    required int id,
+    required String title,
+    required String body,
+    required tz.TZDateTime scheduledTZ,
+    required String payload,
+  }) async {
+    final notificationDetails = await _buildNotificationDetails();
 
     try {
       await _flutterLocalNotificationsPlugin.zonedSchedule(
-        id: 0,
-        title: 'Time to Reflect',
-        body: 'Your evening ritual is ready. Tap to start.',
+        id: id,
+        title: title,
+        body: body,
         scheduledDate: scheduledTZ,
         notificationDetails: notificationDetails,
         androidScheduleMode: AndroidScheduleMode.alarmClock,
-        payload: cycleId,
+        payload: payload,
       );
-      debugPrint('🔔 [alarmClock] Reflection alarm scheduled successfully for $scheduledTZ');
+      debugPrint('🔔 [alarmClock] Alarm $id ("$title") scheduled for $scheduledTZ');
     } catch (e) {
       debugPrint('⚠️ [alarmClock] failed ($e), attempting exactAllowWhileIdle fallback...');
       try {
         await _flutterLocalNotificationsPlugin.zonedSchedule(
-          id: 0,
-          title: 'Time to Reflect',
-          body: 'Your evening ritual is ready. Tap to start.',
+          id: id,
+          title: title,
+          body: body,
           scheduledDate: scheduledTZ,
           notificationDetails: notificationDetails,
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          payload: cycleId,
+          payload: payload,
         );
-        debugPrint('🔔 [exactAllowWhileIdle] Reflection alarm scheduled successfully for $scheduledTZ');
+        debugPrint('🔔 [exactAllowWhileIdle] Alarm $id ("$title") scheduled for $scheduledTZ');
       } catch (e2) {
         debugPrint('⚠️ [exactAllowWhileIdle] failed ($e2), attempting inexact fallback...');
         await _flutterLocalNotificationsPlugin.zonedSchedule(
-          id: 0,
-          title: 'Time to Reflect',
-          body: 'Your evening ritual is ready. Tap to start.',
+          id: id,
+          title: title,
+          body: body,
           scheduledDate: scheduledTZ,
           notificationDetails: notificationDetails,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          payload: cycleId,
+          payload: payload,
         );
-        debugPrint('🔔 [inexactAllowWhileIdle] Reflection alarm scheduled successfully for $scheduledTZ');
+        debugPrint('🔔 [inexactAllowWhileIdle] Alarm $id ("$title") scheduled for $scheduledTZ');
       }
+    }
+  }
+
+  /// Schedules a one-shot alarm for the single reflection time based on cadence.
+  Future<void> scheduleReflectionReminder(DateTime scheduledTime, String cycleId) async {
+    // Cancel any previous alarm so we don't stack duplicates
+    await _flutterLocalNotificationsPlugin.cancelAll();
+
+    final now = tz.TZDateTime.now(tz.local);
+
+    var scheduledTZ = tz.TZDateTime(
+      tz.local,
+      scheduledTime.year,
+      scheduledTime.month,
+      scheduledTime.day,
+      scheduledTime.hour,
+      scheduledTime.minute,
+      scheduledTime.second,
+    );
+
+    // If the scheduled time is in the past, push it to tomorrow
+    if (scheduledTZ.isBefore(now)) {
+      debugPrint('⚠️ Scheduled time $scheduledTZ is before now $now. Adding 1 day...');
+      scheduledTZ = scheduledTZ.add(const Duration(days: 1));
+    }
+
+    await _scheduleAlarmEntry(
+      id: 0,
+      title: 'Time to Reflect',
+      body: 'Your reflection is ready. Tap to start.',
+      scheduledTZ: scheduledTZ,
+      payload: cycleId,
+    );
+  }
+
+  /// Schedules alarms for multiple rituals (Pro feature).
+  Future<void> scheduleMultiRitualReminders(List<ReflectionRitual> rituals) async {
+    await _flutterLocalNotificationsPlugin.cancelAll();
+    final now = tz.TZDateTime.now(tz.local);
+
+    for (int i = 0; i < rituals.length; i++) {
+      final ritual = rituals[i];
+      if (!ritual.isEnabled) continue;
+
+      var scheduledTZ = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day,
+        ritual.hour,
+        ritual.minute,
+      );
+
+      if (scheduledTZ.isBefore(now)) {
+        scheduledTZ = scheduledTZ.add(Duration(days: ritual.cadenceDays));
+      }
+
+      final notifId = (ritual.id.hashCode & 0x7FFFFFFF) % 100000 + 10;
+      await _scheduleAlarmEntry(
+        id: notifId,
+        title: ritual.name,
+        body: 'Time for your ${ritual.name} session. Tap to start.',
+        scheduledTZ: scheduledTZ,
+        payload: 'ritual:${ritual.id}',
+      );
+      debugPrint('🔔 [Multi-Ritual] Scheduled "${ritual.name}" for $scheduledTZ (cadence: ${ritual.cadenceDays}d)');
     }
   }
 
@@ -308,6 +363,25 @@ class NotificationService {
           suffix = '_$uid';
         }
       } catch (_) {}
+
+      // If user is Pro, check for multi-ritual settings first
+      if (SubscriptionService().isPro) {
+        final ritualsJson = prefs.getString('multi_reflection_rituals$suffix');
+        if (ritualsJson != null && ritualsJson.isNotEmpty) {
+          try {
+            final List<dynamic> decoded = jsonDecode(ritualsJson);
+            final rituals = decoded
+                .map((e) => ReflectionRitual.fromJson(Map<String, dynamic>.from(e)))
+                .toList();
+            if (rituals.isNotEmpty) {
+              await scheduleMultiRitualReminders(rituals);
+              return;
+            }
+          } catch (e) {
+            debugPrint('Error decoding multi-rituals for scheduling: $e');
+          }
+        }
+      }
 
       final cadenceDays = prefs.getInt('reflection_cadence_days$suffix') ?? 3;
       final hour = prefs.getInt('reflection_reminder_hour$suffix') ?? 21;

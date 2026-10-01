@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.SET_WALLPAPER"/>
+    <uses-permission android:name="com.android.vending.BILLING"/>
     <application
         android:label="Dusk"
         android:name="${applicationName}"
@@ -40,11 +41,38 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- System Share Sheet: Text and Links -->
+            <!-- System Share Sheet: Text, Links, and Text Files -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/*" />
+            </intent-filter>
+
+            <!-- System Share Sheet: Audio & Voice Memos (Single & Multiple) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/ogg" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/ogg" />
             </intent-filter>
 
             <!-- System Share Sheet: Single Image -->
@@ -61,17 +89,21 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
 
-            <!-- Deep linking for Widget touch targets -->
+            <!-- Deep linking for Widget touch targets and OAuth callbacks -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="dusk" android:host="capture" />
+                <data android:scheme="dusk" android:host="home" />
+                <data android:scheme="dusk" android:host="login-callback" />
+                <data android:scheme="dusk" />
             </intent-filter>
         </activity>
 
-        <!-- Dusk Quick Capture Home Screen Widget -->
+        <!-- 1. Dusk Quick Capture Home Screen Widget (Thought, Voice & Photo Bar) -->
         <receiver android:name=".DuskQuickCaptureWidgetProvider"
+                  android:label="@string/widget_quick_capture_label"
                   android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -79,6 +111,30 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/dusk_quick_capture_widget_info" />
+        </receiver>
+
+        <!-- 2. Dusk Split Capture Widget (Separated Voice & Thought Cards) -->
+        <receiver android:name=".DuskVoiceTextWidgetProvider"
+                  android:label="@string/widget_voice_text_label"
+                  android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dusk_voice_text_widget_info" />
+        </receiver>
+
+        <!-- 3. Dusk Analytics & Rhythm Widget (7-Day Graph, Breakdown & Ritual Gauge) -->
+        <receiver android:name=".DuskAnalyticsWidgetProvider"
+                  android:label="@string/widget_analytics_label"
+                  android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/dusk_analytics_widget_info" />
         </receiver>
 
         <!-- flutter_local_notifications receivers for scheduled notifications and alarms -->

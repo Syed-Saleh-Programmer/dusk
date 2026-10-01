@@ -13,9 +13,11 @@ import 'dump_detail_screen.dart';
 import 'ai_cycle_summary_screen.dart';
 import 'cycle_timeline_screen.dart';
 import 'settings_screen.dart';
+import '../theme/app_theme.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/dusk_ui_components.dart';
 import '../widgets/capture_speed_dial.dart';
+import '../widgets/project_components.dart';
 
 class _NotchedSlotFabLocation extends StandardFabLocation
     with FabDockedOffsetY {
@@ -465,7 +467,9 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                               ),
                             ),
                             Text(
-                              _getGreeting(appState),
+                              appState.activeProject != null
+                                  ? '${appState.activeProject!.icon} ${appState.activeProject!.name} • ${_getGreeting(appState)}'
+                                  : _getGreeting(appState),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
@@ -539,6 +543,8 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                             ),
                         ],
                       ),
+                      const SizedBox(width: 8),
+                      const DuskQuickThemeButton(size: 40, iconSize: 18),
                     ],
                   ),
                 ),
@@ -610,6 +616,10 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                       : const SizedBox.shrink(),
                 ),
 
+                // Project Space Pills Bar (Pinned, fixed height, 0 UI shift)
+                const DuskProjectPillsBar(),
+                const SizedBox(height: 6),
+
                 // Main Content Body
                 Expanded(
                   child: Builder(
@@ -642,6 +652,13 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                         final dumpDate = _parseDumpDate(
                           dump['captured_at'] ?? dump['created_at'],
                         );
+
+                        if (appState.activeProjectId != null) {
+                          final dumpProjectId = dump['project_id']?.toString();
+                          if (dumpProjectId != appState.activeProjectId) {
+                            return false;
+                          }
+                        }
 
                         if (_filterOptions.dumpType != 'All' &&
                             type != _filterOptions.dumpType.toLowerCase()) {
@@ -689,20 +706,28 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                         return dateB.compareTo(dateA);
                       });
 
-                      // Calculate Analytics
-                      final thoughtCount = appState.allDumps
+                      // Calculate Analytics (scoped to active space if selected)
+                      final spaceDumps = appState.activeProjectId != null
+                          ? appState.allDumps
+                              .where((d) =>
+                                  d['project_id']?.toString() ==
+                                  appState.activeProjectId)
+                              .toList()
+                          : appState.allDumps;
+
+                      final thoughtCount = spaceDumps
                           .where((d) => d['type'] == 'text')
                           .length;
-                      final voiceCount = appState.allDumps
+                      final voiceCount = spaceDumps
                           .where((d) => d['type'] == 'voice')
                           .length;
-                      final photoCount = appState.allDumps
+                      final photoCount = spaceDumps
                           .where((d) => d['type'] == 'photo')
                           .length;
-                      final totalCaptures = appState.allDumps.length;
+                      final totalCaptures = spaceDumps.length;
 
                       final now = DateTime.now();
-                      final todayCaptures = appState.allDumps.where((d) {
+                      final todayCaptures = spaceDumps.where((d) {
                         final dt =
                             _parseDumpDate(d['captured_at'] ?? d['created_at']);
                         return dt != null &&
@@ -711,7 +736,7 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                             dt.day == now.day;
                       }).length;
 
-                      final weeklyBars = _buildWeeklyBars(appState.allDumps);
+                      final weeklyBars = _buildWeeklyBars(spaceDumps);
                       final int weeklyTotal = weeklyBars.fold(
                         0,
                         (sum, item) => sum + item.count,
@@ -865,12 +890,13 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                           ],
                                         ),
                                         Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             DuskPillBadge(
                                               text: '$todayCaptures Today',
                                               variant: DuskBadgeVariant.peach,
                                             ),
-                                            const SizedBox(width: 6),
+                                            const SizedBox(width: 4),
                                             DuskPillBadge(
                                               text: '$activeDays/7 Days',
                                               variant: DuskBadgeVariant.neutral,
@@ -991,9 +1017,7 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                           InkWell(
                                             onTap: () {
                                               Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      CycleTimelineScreen(
+                                                DuskPageRoute.perspectiveSlide(builder: (_) => CycleTimelineScreen(
                                                         cycleId: cycle.id,
                                                       ),
                                                 ),
@@ -1034,9 +1058,7 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                               onTap: () {
                                                 Navigator.of(context)
                                                     .push(
-                                                      MaterialPageRoute(
-                                                        builder: (_) =>
-                                                            AiCycleSummaryScreen(
+                                                      DuskPageRoute.ritual(builder: (_) => AiCycleSummaryScreen(
                                                               cycleId: cycle.id,
                                                             ),
                                                       ),
@@ -1120,7 +1142,8 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                               },
                             ),
 
-                            if (!_filterOptions.isDefault)
+                            if (!_filterOptions.isDefault ||
+                                appState.activeProjectId != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Row(
@@ -1128,7 +1151,9 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                       MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
-                                      'Showing ${filteredDumps.length} filtered',
+                                      appState.activeProject != null
+                                          ? 'Showing ${filteredDumps.length} in ${appState.activeProject!.name}'
+                                          : 'Showing ${filteredDumps.length} filtered',
                                       style: const TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
@@ -1136,12 +1161,17 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                       ),
                                     ),
                                     GestureDetector(
-                                      onTap: () => setState(
-                                        () => _filterOptions.reset(),
-                                      ),
-                                      child: const Text(
-                                        'Clear filters',
-                                        style: TextStyle(
+                                      onTap: () {
+                                        setState(() {
+                                          _filterOptions.reset();
+                                        });
+                                        appState.setActiveProject(null);
+                                      },
+                                      child: Text(
+                                        appState.activeProjectId != null
+                                            ? 'Show all captures'
+                                            : 'Clear filters',
+                                        style: const TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w700,
                                           color: Color(0xFFFF7A1A),
@@ -1187,7 +1217,9 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                     Text(
                                       _searchQuery.isEmpty &&
                                               _filterOptions.isDefault
-                                          ? 'No captures yet'
+                                          ? (appState.activeProject != null
+                                              ? 'No captures in ${appState.activeProject!.name}'
+                                              : 'No captures yet')
                                           : 'No matches found',
                                       style: const TextStyle(
                                         fontSize: 15,
@@ -1199,7 +1231,9 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                                     Text(
                                       _searchQuery.isEmpty &&
                                               _filterOptions.isDefault
-                                          ? 'Tap + to capture a thought, voice note, or moment.'
+                                          ? (appState.activeProject != null
+                                              ? 'Captures tagged with this space will appear here.'
+                                              : 'Tap + to capture a thought, voice note, or moment.')
                                           : 'Try adjusting your filters or search.',
                                       textAlign: TextAlign.center,
                                       style: const TextStyle(
@@ -1447,18 +1481,22 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
     final String? mediaUrl = dump['media_url']?.toString();
     final bool hasPhoto =
         type == 'photo' && mediaUrl != null && mediaUrl.isNotEmpty;
+    final String? dumpProjectId = dump['project_id']?.toString();
+    final dumpProject = (dumpProjectId != null && dumpProjectId.isNotEmpty)
+        ? context.read<AppState>().getProjectById(dumpProjectId)
+        : null;
 
     return GestureDetector(
       key: ValueKey(dumpId),
       onTap: () {
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => DumpDetailScreen(dump: dump)),
+          DuskPageRoute.perspectiveSlide(builder: (_) => DumpDetailScreen(dump: dump)),
         );
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         constraints: const BoxConstraints(minHeight: 80),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
@@ -1484,7 +1522,7 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
               ),
               child: Icon(typeIcon, size: 21, color: accentColor),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 11),
 
             // Full Title & Timestamp (re-renders immediately when background AI processing finishes)
             Expanded(
@@ -1499,7 +1537,7 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                         alignment: Alignment.centerLeft,
                         children: <Widget>[
                           ...previousChildren,
-                          if (currentChild != null) currentChild,
+                          ?currentChild,
                         ],
                       );
                     },
@@ -1516,7 +1554,7 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                       ),
                     ),
                   ),
-                  if (timeLabel.isNotEmpty || isProcessing) ...[
+                  if (timeLabel.isNotEmpty || isProcessing || dumpProject != null) ...[
                     const SizedBox(height: 5),
                     Row(
                       children: [
@@ -1529,8 +1567,30 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                               color: Color(0xFF9A938A),
                             ),
                           ),
-                        if (isProcessing) ...[
+                        if (dumpProject != null) ...[
                           if (timeLabel.isNotEmpty)
+                            const Text(
+                              ' • ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFFBEB7AC),
+                              ),
+                            ),
+                          Flexible(
+                            child: Text(
+                              '${dumpProject.icon} ${dumpProject.name}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(dumpProject.colorValue),
+                              ),
+                            ),
+                          ),
+                        ],
+                        if (isProcessing) ...[
+                          if (timeLabel.isNotEmpty || dumpProject != null)
                             const Text(
                               ' • ',
                               style: TextStyle(
@@ -1549,12 +1609,16 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                             ),
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            'Refining...',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: accentColor,
+                          Flexible(
+                            child: Text(
+                              'Refining...',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: accentColor,
+                              ),
                             ),
                           ),
                         ],
@@ -1567,21 +1631,21 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
 
             // Small Preview of Image for Image Dumps
             if (hasPhoto) ...[
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Container(
-                width: 56,
-                height: 56,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFFEDE6DA), width: 1),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
+                  borderRadius: BorderRadius.circular(9),
                   child: (mediaUrl.startsWith('/') || mediaUrl.contains(r':\'))
                       ? Image.file(
                           File(mediaUrl),
-                          width: 56,
-                          height: 56,
+                          width: 50,
+                          height: 50,
                           fit: BoxFit.cover,
                           errorBuilder: (c, e, s) => Container(
                             color: const Color(0xFFF4EFEA),
@@ -1594,8 +1658,8 @@ class _CapturesFeedScreenState extends State<CapturesFeedScreen> {
                         )
                       : Image.network(
                           mediaUrl,
-                          width: 56,
-                          height: 56,
+                          width: 50,
+                          height: 50,
                           fit: BoxFit.cover,
                           errorBuilder: (c, e, s) => Container(
                             color: const Color(0xFFF4EFEA),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 /// Displays the official Dusk "Folded Page & Setting Sun" logo mark.
 class DuskLogo extends StatelessWidget {
@@ -13,6 +14,7 @@ class DuskLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppTheme.of(context);
     final logoImage = Image.asset(
       'assets/icons/dusk_icon_foreground_1024.png',
       width: size,
@@ -34,15 +36,15 @@ class DuskLogo extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFFF9F7F2),
+        color: p.background,
         borderRadius: BorderRadius.circular(size * 0.24),
         border: Border.all(
-          color: const Color(0xFFEBE5DC),
+          color: p.outline,
           width: 1.2,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1B1A19).withValues(alpha: 0.05),
+            color: p.onSurface.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),

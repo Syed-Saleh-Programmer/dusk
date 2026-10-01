@@ -6,13 +6,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/dump.dart';
 import '../models/reflection_cycle.dart';
 import '../models/task_item.dart';
+import '../models/project.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
   factory SupabaseService() => _instance;
   SupabaseService._internal();
 
-  final SupabaseClient _client = Supabase.instance.client;
+  SupabaseClient get _client => Supabase.instance.client;
 
   Map<String, dynamic>? _parseEdgeResponse(dynamic data) {
     if (data == null) return null;
@@ -28,8 +29,89 @@ class SupabaseService {
     return null;
   }
 
+  String _resolveStorageExt(DumpType type, String path) {
+    final rawExt = path.contains('.')
+        ? path.split('.').last.toLowerCase().trim()
+        : '';
+    if (type == DumpType.voice) {
+      switch (rawExt) {
+        case 'mp3':
+        case 'mpeg':
+        case 'mpga':
+          return 'mp3';
+        case 'wav':
+          return 'wav';
+        case 'ogg':
+        case 'opus':
+          return 'ogg';
+        case 'flac':
+          return 'flac';
+        case 'webm':
+          return 'webm';
+        case 'mp4':
+          return 'mp4';
+        case 'm4a':
+        case 'aac':
+        case '3gp':
+        case '3gpp':
+        case 'amr':
+        default:
+          return 'm4a';
+      }
+    } else {
+      switch (rawExt) {
+        case 'png':
+          return 'png';
+        case 'webp':
+          return 'webp';
+        case 'gif':
+          return 'gif';
+        case 'jpg':
+        case 'jpeg':
+        default:
+          return 'jpg';
+      }
+    }
+  }
+
+  String _resolveMimeType(DumpType type, String ext) {
+    if (type == DumpType.voice) {
+      switch (ext) {
+        case 'mp3':
+          return 'audio/mpeg';
+        case 'wav':
+          return 'audio/wav';
+        case 'ogg':
+          return 'audio/ogg';
+        case 'flac':
+          return 'audio/flac';
+        case 'webm':
+          return 'audio/webm';
+        case 'mp4':
+        case 'm4a':
+        default:
+          return 'audio/mp4';
+      }
+    } else {
+      switch (ext) {
+        case 'png':
+          return 'image/png';
+        case 'webp':
+          return 'image/webp';
+        case 'gif':
+          return 'image/gif';
+        case 'jpg':
+        default:
+          return 'image/jpeg';
+      }
+    }
+  }
+
   // Dumps
-  Future<Map<String, Map<String, dynamic>>> syncDumps(List<Dump> dumps) async {
+  Future<Map<String, Map<String, dynamic>>> syncDumps(
+    List<Dump> dumps, {
+    List<String>? availableTags,
+  }) async {
     final Map<String, Map<String, dynamic>> results = {};
     final activeUserId = currentUser?.id;
     if (activeUserId == null) return results;
@@ -39,6 +121,7 @@ class SupabaseService {
         continue;
       }
       String? uploadedMediaUrl;
+      String? resolvedMimeType;
 
       // 1. Upload Media to Storage if necessary
       if ((dump.type == DumpType.voice || dump.type == DumpType.photo) && dump.mediaUrl != null) {
@@ -46,18 +129,24 @@ class SupabaseService {
           final isLocal = dump.mediaUrl!.startsWith('/') || dump.mediaUrl!.contains(r':\');
           if (isLocal && File(dump.mediaUrl!).existsSync()) {
             final file = File(dump.mediaUrl!);
-            final fileExt = dump.type == DumpType.voice ? "m4a" : "jpg";
+            final fileExt = _resolveStorageExt(dump.type, dump.mediaUrl!);
+            resolvedMimeType = _resolveMimeType(dump.type, fileExt);
             final fileName = '${dump.id}.$fileExt';
             final storagePath = '$activeUserId/dumps/$fileName';
 
             await _client.storage.from('user-media').upload(
               storagePath,
               file,
-              fileOptions: const FileOptions(upsert: true),
+              fileOptions: FileOptions(
+                upsert: true,
+                contentType: resolvedMimeType,
+              ),
             );
             uploadedMediaUrl = storagePath;
           } else if (!isLocal) {
             uploadedMediaUrl = dump.mediaUrl;
+            final ext = _resolveStorageExt(dump.type, dump.mediaUrl!);
+            resolvedMimeType = _resolveMimeType(dump.type, ext);
           }
         } catch (e) {
           debugPrint('Failed to upload media for dump ${dump.id}: $e');
@@ -67,7 +156,7 @@ class SupabaseService {
 
       // 2. Insert or Upsert row into dumps table
       try {
-        await _client.from('dumps').upsert({
+        final payload = <String, dynamic>{
           'id': dump.id,
           'user_id': activeUserId,
           'type': dump.type.name,
@@ -76,10 +165,27 @@ class SupabaseService {
           'transcript': dump.transcript,
           'media_url': uploadedMediaUrl ?? dump.mediaUrl, // use remote path if uploaded
           'category': dump.category,
+          if (dump.projectId != null && dump.projectId!.isNotEmpty)
+            'project_id': dump.projectId,
+          'tags': dump.tags,
           'captured_at': dump.capturedAt.toUtc().toIso8601String(),
           'sync_status': 'synced',
           'ai_summary': dump.aiSummary,
-        });
+        };
+
+        try {
+          await _client.from('dumps').upsert(payload);
+        } catch (upsertErr) {
+          final errStr = upsertErr.toString();
+          if (errStr.contains('tags') || errStr.contains('project_id')) {
+            final fallbackPayload = Map<String, dynamic>.from(payload);
+            if (errStr.contains('tags')) fallbackPayload.remove('tags');
+            if (errStr.contains('project_id')) fallbackPayload.remove('project_id');
+            await _client.from('dumps').upsert(fallbackPayload);
+          } else {
+            rethrow;
+          }
+        }
 
         results[dump.id] = {'synced': true};
 
@@ -89,6 +195,12 @@ class SupabaseService {
             final res = await _client.functions.invoke('process-voice', body: {
               'dump_id': dump.id,
               'file_path': uploadedMediaUrl,
+              'mime_type': ?resolvedMimeType,
+              if (dump.content != null && dump.content!.trim().isNotEmpty)
+                'content': dump.content!.trim(),
+              if (dump.tags.isNotEmpty) 'existing_tags': dump.tags,
+              if (availableTags != null && availableTags.isNotEmpty)
+                'available_tags': availableTags,
             });
             final data = _parseEdgeResponse(res.data);
             if (data != null) {
@@ -97,6 +209,7 @@ class SupabaseService {
                 'transcript': data['transcript'] as String?,
                 'title': data['title'] as String?,
                 'summary': data['summary'] as String?,
+                'tags': data['tags'],
                 'tasks': data['tasks'],
               };
             }
@@ -104,6 +217,12 @@ class SupabaseService {
             final res = await _client.functions.invoke('process-photo', body: {
               'dump_id': dump.id,
               'file_path': uploadedMediaUrl,
+              'mime_type': ?resolvedMimeType,
+              if (dump.content != null && dump.content!.trim().isNotEmpty)
+                'content': dump.content!.trim(),
+              if (dump.tags.isNotEmpty) 'existing_tags': dump.tags,
+              if (availableTags != null && availableTags.isNotEmpty)
+                'available_tags': availableTags,
             });
             final data = _parseEdgeResponse(res.data);
             if (data != null) {
@@ -112,6 +231,7 @@ class SupabaseService {
                 'transcript': data['transcript'] as String?,
                 'title': data['title'] as String?,
                 'summary': data['summary'] as String?,
+                'tags': data['tags'],
                 'tasks': data['tasks'],
               };
             }
@@ -124,6 +244,22 @@ class SupabaseService {
       }
     }
     return results;
+  }
+
+  Future<bool> updateDumpTags(String dumpId, List<String> tags) async {
+    final userId = currentUser?.id;
+    if (userId == null) return false;
+    try {
+      await _client
+          .from('dumps')
+          .update({'tags': Dump.parseTags(tags)})
+          .eq('id', dumpId)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      debugPrint('Supabase updateDumpTags error: $e');
+      return false;
+    }
   }
 
   Future<void> deleteDump(String dumpId) async {
@@ -150,6 +286,46 @@ class SupabaseService {
     } catch (_) {}
     // Delete the dump record scoped to the authenticated user
     await _client.from('dumps').delete().eq('id', dumpId).eq('user_id', userId);
+  }
+
+  Future<void> deleteDumps(List<String> dumpIds) async {
+    final userId = currentUser?.id;
+    if (userId == null || dumpIds.isEmpty) return;
+    try {
+      final dumps = await _client
+          .from('dumps')
+          .select('id, media_url')
+          .inFilter('id', dumpIds)
+          .eq('user_id', userId);
+      final mediaPaths = <String>[];
+      for (final d in dumps) {
+        final mUrl = d['media_url']?.toString();
+        if (mUrl != null && !mUrl.startsWith('http') && !mUrl.startsWith('/')) {
+          mediaPaths.add(mUrl);
+        }
+      }
+      if (mediaPaths.isNotEmpty) {
+        try {
+          await _client.storage.from('user-media').remove(mediaPaths);
+        } catch (_) {}
+      }
+
+      try {
+        await _client
+            .from('tasks')
+            .delete()
+            .inFilter('dump_id', dumpIds)
+            .eq('user_id', userId);
+      } catch (_) {}
+
+      await _client
+          .from('dumps')
+          .delete()
+          .inFilter('id', dumpIds)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('Supabase deleteDumps error: $e');
+    }
   }
 
   Future<String> getSignedUrl(String path) async {
@@ -242,10 +418,15 @@ class SupabaseService {
     });
   }
 
-  Future<Map<String, dynamic>> generateInsight(String sessionId) async {
+  Future<Map<String, dynamic>> generateInsight(
+    String sessionId, {
+    List<String>? availableTags,
+  }) async {
     final res = await _client.functions.invoke('generate-insight', body: {
       'session_id': sessionId,
       'user_id': currentUser!.id,
+      if (availableTags != null && availableTags.isNotEmpty)
+        'available_tags': availableTags,
     });
     final parsed = _parseEdgeResponse(res.data);
     if (parsed == null) throw Exception('Invalid response from generate-insight: ${res.data}');
@@ -330,7 +511,13 @@ class SupabaseService {
     await _client.auth.signOut();
   }
 
-  User? get currentUser => _client.auth.currentUser;
+  User? get currentUser {
+    try {
+      return _client.auth.currentUser;
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Uploads a profile avatar image to Supabase Storage and returns the storage path or signed URL.
   Future<String?> uploadProfileAvatar(File imageFile) async {
@@ -393,12 +580,28 @@ class SupabaseService {
     );
   }
 
+  /// Syncs the user's custom tags to Supabase Auth metadata.
+  Future<void> updateUserCustomTags(List<String> customTags) async {
+    final user = currentUser;
+    if (user == null) return;
+    final existingData = Map<String, dynamic>.from(user.userMetadata ?? {});
+    existingData['custom_tags'] = Dump.parseTags(customTags);
+    try {
+      await _client.auth.updateUser(
+        UserAttributes(data: existingData),
+      );
+    } catch (e) {
+      debugPrint('Failed to sync custom tags to Supabase Auth: $e');
+    }
+  }
+
   /// Syncs the user's reflection schedule and alarm sound preferences to Supabase Auth metadata & reflection_schedule table.
   Future<void> updateUserScheduleSettings({
     int? cadenceDays,
     int? reminderHour,
     int? reminderMinute,
     String? alarmSoundId,
+    List<Map<String, dynamic>>? multiRituals,
   }) async {
     final user = currentUser;
     if (user == null) return;
@@ -415,6 +618,9 @@ class SupabaseService {
     }
     if (alarmSoundId != null && alarmSoundId.isNotEmpty) {
       existingData['selected_alarm_sound_id'] = alarmSoundId;
+    }
+    if (multiRituals != null) {
+      existingData['multi_rituals'] = multiRituals;
     }
 
     try {
@@ -476,6 +682,8 @@ class SupabaseService {
     String userId, {
     String? content,
     String? type,
+    List<String>? availableTags,
+    List<String>? existingTags,
   }) async {
     try {
       final res = await _client.functions.invoke('generate-dump-summary', body: {
@@ -483,6 +691,10 @@ class SupabaseService {
         'user_id': userId,
         if (content != null && content.isNotEmpty) 'content': content,
         if (type != null && type.isNotEmpty) 'type': type,
+        if (availableTags != null && availableTags.isNotEmpty)
+          'available_tags': availableTags,
+        if (existingTags != null && existingTags.isNotEmpty)
+          'existing_tags': existingTags,
       });
       final data = _parseEdgeResponse(res.data);
       if (data != null) {
@@ -490,9 +702,14 @@ class SupabaseService {
         if (data['tasks'] is List) {
           tasksJson = jsonEncode(data['tasks']);
         }
+        String? tagsJson;
+        if (data['tags'] is List) {
+          tagsJson = jsonEncode(data['tags']);
+        }
         return {
           'title': data['title'] as String?,
           'summary': data['summary'] as String?,
+          'tags_json': ?tagsJson,
           'tasks_json': ?tasksJson,
         };
       }
@@ -549,12 +766,23 @@ class SupabaseService {
       await _client.from('tasks').upsert(payload);
       return true;
     } catch (e) {
-      if (e.toString().contains('due_date')) {
+      final errStr = e.toString();
+      if (errStr.contains('due_date') || errStr.contains('tags')) {
         try {
-          final fallback = Map<String, dynamic>.from(payload)..remove('due_date');
+          final fallback = Map<String, dynamic>.from(payload);
+          if (errStr.contains('due_date')) fallback.remove('due_date');
+          if (errStr.contains('tags')) fallback.remove('tags');
           await _client.from('tasks').upsert(fallback);
           return true;
-        } catch (_) {}
+        } catch (_) {
+          try {
+            final fallbackBoth = Map<String, dynamic>.from(payload)
+              ..remove('due_date')
+              ..remove('tags');
+            await _client.from('tasks').upsert(fallbackBoth);
+            return true;
+          } catch (_) {}
+        }
       }
       debugPrint('Supabase upsertTask error: $e');
       return false;
@@ -573,14 +801,28 @@ class SupabaseService {
       await _client.from('tasks').upsert(validRows);
       return true;
     } catch (e) {
-      if (e.toString().contains('due_date')) {
+      final errStr = e.toString();
+      if (errStr.contains('due_date') || errStr.contains('tags')) {
         try {
-          final fallbackRows = validRows
-              .map((r) => Map<String, dynamic>.from(r)..remove('due_date'))
-              .toList();
+          final fallbackRows = validRows.map((r) {
+            final copy = Map<String, dynamic>.from(r);
+            if (errStr.contains('due_date')) copy.remove('due_date');
+            if (errStr.contains('tags')) copy.remove('tags');
+            return copy;
+          }).toList();
           await _client.from('tasks').upsert(fallbackRows);
           return true;
-        } catch (_) {}
+        } catch (_) {
+          try {
+            final fallbackBoth = validRows
+                .map((r) => Map<String, dynamic>.from(r)
+                  ..remove('due_date')
+                  ..remove('tags'))
+                .toList();
+            await _client.from('tasks').upsert(fallbackBoth);
+            return true;
+          } catch (_) {}
+        }
       }
       debugPrint('Supabase upsertTasks error: $e');
       return false;
@@ -594,6 +836,112 @@ class SupabaseService {
       await _client.from('tasks').delete().eq('id', taskId).eq('user_id', userId);
     } catch (e) {
       debugPrint('Supabase deleteTask error: $e');
+    }
+  }
+
+  Future<void> deleteTasks(List<String> taskIds) async {
+    final userId = currentUser?.id;
+    if (userId == null || taskIds.isEmpty) return;
+    try {
+      await _client
+          .from('tasks')
+          .delete()
+          .inFilter('id', taskIds)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('Supabase deleteTasks error: $e');
+    }
+  }
+
+  // ===========================================================================
+  // Projects
+  // ===========================================================================
+
+  Future<List<Project>> getAllProjects() async {
+    final userId = currentUser?.id;
+    if (userId == null) return [];
+    try {
+      final res = await _client
+          .from('projects')
+          .select()
+          .eq('user_id', userId)
+          .eq('is_archived', false)
+          .order('created_at', ascending: true);
+      final list = res as List<dynamic>;
+      return list.map((item) => Project.fromMap(Map<String, dynamic>.from(item))).toList();
+    } catch (e) {
+      debugPrint('Supabase getAllProjects error (table may not exist yet): $e');
+      return [];
+    }
+  }
+
+  Future<bool> upsertProject(Project project) async {
+    final userId = currentUser?.id;
+    if (userId == null || (project.userId.isNotEmpty && project.userId != userId)) {
+      return false;
+    }
+    final payload = project.toSupabaseMap();
+    try {
+      await _client.from('projects').upsert(payload);
+      return true;
+    } catch (e) {
+      debugPrint('Supabase upsertProject error: $e');
+      return false;
+    }
+  }
+
+  Future<void> deleteProject(String projectId) async {
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      // 1. Unlink dumps and tasks in cloud
+      await _client
+          .from('dumps')
+          .update({'project_id': null})
+          .eq('project_id', projectId)
+          .eq('user_id', userId);
+      await _client
+          .from('tasks')
+          .update({'project_id': null})
+          .eq('project_id', projectId)
+          .eq('user_id', userId);
+      // 2. Delete project row
+      await _client.from('projects').delete().eq('id', projectId).eq('user_id', userId);
+    } catch (e) {
+      debugPrint('Supabase deleteProject error: $e');
+    }
+  }
+
+  Future<void> updateDumpProject(String dumpId, String? projectId) async {
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _client
+          .from('dumps')
+          .update({'project_id': projectId})
+          .eq('id', dumpId)
+          .eq('user_id', userId);
+      await _client
+          .from('tasks')
+          .update({'project_id': projectId})
+          .eq('dump_id', dumpId)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('Supabase updateDumpProject error: $e');
+    }
+  }
+
+  Future<void> updateTaskProject(String taskId, String? projectId) async {
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _client
+          .from('tasks')
+          .update({'project_id': projectId})
+          .eq('id', taskId)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('Supabase updateTaskProject error: $e');
     }
   }
 }

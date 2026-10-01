@@ -9,7 +9,7 @@ serve(async (req) => {
   }
 
   try {
-    const { dump_id, file_path, mime_type } = await req.json()
+    const { dump_id, file_path, mime_type, available_tags, existing_tags } = await req.json()
 
     // 1. Initialize Supabase Client
     const supabaseClient = createClient(
@@ -95,15 +95,19 @@ serve(async (req) => {
     // 5. Trigger AI summary generation now that transcript is available
     let title = ''
     let summary = ''
-    let tasks: string[] = []
+    let tags: string[] = []
+    let tasks: any[] = []
     if (description.trim()) {
       try {
         const sumRes = await supabaseClient.functions.invoke('generate-dump-summary', {
-          body: { dump_id, content: description, type: 'photo' }
+          body: { dump_id, content: description, type: 'photo', available_tags, existing_tags }
         })
         if (sumRes.data) {
           title = sumRes.data.title || ''
           summary = sumRes.data.summary || ''
+          if (Array.isArray(sumRes.data.tags)) {
+            tags = sumRes.data.tags
+          }
           if (Array.isArray(sumRes.data.tasks)) {
             tasks = sumRes.data.tasks
           }
@@ -113,10 +117,10 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, transcript: description, title, summary, tasks }), {
+    return new Response(JSON.stringify({ success: true, transcript: description, title, summary, tags, tasks }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     })
-  } catch (error) {
+  } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },

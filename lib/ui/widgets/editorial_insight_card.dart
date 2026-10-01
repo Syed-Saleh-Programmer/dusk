@@ -728,43 +728,97 @@ class EditorialInsightCardCanvas extends StatelessWidget {
     }
 
     final isWallpaper = format == EditorialCardFormat.wallpaper9x16;
-    final isSquare = format == EditorialCardFormat.square1x1;
 
-    return AspectRatio(
-      aspectRatio: format.aspectRatio,
-      child: Container(
-        decoration: _buildOuterCanvasDecoration(isWallpaper: isWallpaper),
+    if (format == EditorialCardFormat.editorialCard) {
+      return Container(
+        decoration: _buildOuterCanvasDecoration(isWallpaper: false),
         clipBehavior: Clip.antiAlias,
         child: Stack(
-          fit: StackFit.expand,
           children: [
-            // Background ambient texture / grain / celestial atmosphere
             if (showTextureAndRules)
               Positioned.fill(
                 child: CustomPaint(
                   painter: _EditorialAtmospherePainter(
                     theme: theme,
-                    isWallpaper: isWallpaper,
+                    isWallpaper: false,
                   ),
                 ),
               ),
-
-            // Content layout
             Padding(
-              padding: isWallpaper
-                  ? const EdgeInsets.fromLTRB(22, 26, 22, 24)
-                  : isSquare
-                      ? const EdgeInsets.all(18)
-                      : const EdgeInsets.all(20),
-              child: isWallpaper
-                  ? _buildWallpaperLayout()
-                  : Center(
-                      child: _buildThemedCardSurface(
-                        isWallpaper: false,
-                        isSquare: isSquare,
-                        isInline: false,
-                      ),
+              padding: const EdgeInsets.all(20),
+              child: _buildThemedCardSurface(
+                isWallpaper: false,
+                isSquare: false,
+                isInline: false,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (isWallpaper) {
+      return AspectRatio(
+        aspectRatio: 9 / 16,
+        child: Container(
+          decoration: _buildOuterCanvasDecoration(isWallpaper: true),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (showTextureAndRules)
+                Positioned.fill(
+                  child: CustomPaint(
+                    painter: _EditorialAtmospherePainter(
+                      theme: theme,
+                      isWallpaper: true,
                     ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                child: _buildWallpaperLayout(),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Square 1:1
+    return AspectRatio(
+      aspectRatio: 1.0,
+      child: Container(
+        decoration: _buildOuterCanvasDecoration(isWallpaper: false),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (showTextureAndRules)
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _EditorialAtmospherePainter(
+                    theme: theme,
+                    isWallpaper: false,
+                  ),
+                ),
+              ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: 380,
+                    child: _buildThemedCardSurface(
+                      isWallpaper: false,
+                      isSquare: true,
+                      isInline: false,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -776,62 +830,84 @@ class EditorialInsightCardCanvas extends StatelessWidget {
   Widget _buildWallpaperLayout() {
     final spec = _ThemeVisualSpec.forTheme(theme);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Top minimal issue/date header above or below lockscreen clock zone
-        if (showDateStamp)
-          Opacity(
-            opacity: 0.72,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  insight.issueNumber,
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w600,
-                    color: spec.mutedTextColor,
-                    letterSpacing: 1.4,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final topSpacing = (constraints.maxHeight * 0.14).clamp(10.0, 90.0);
+        final bottomSpacing = (constraints.maxHeight * 0.04).clamp(6.0, 32.0);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Top minimal issue/date header above or below lockscreen clock zone
+            if (showDateStamp)
+              Opacity(
+                opacity: 0.72,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        insight.issueNumber,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.ibmPlexMono(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          color: spec.mutedTextColor,
+                          letterSpacing: 1.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        insight.formattedDateUpper,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.ibmPlexMono(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w500,
+                          color: spec.mutedTextColor,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Lockscreen clock breathing room (adaptive to available height)
+            SizedBox(height: topSpacing),
+
+            // Framed or floating editorial centerpiece - scales down if needed to prevent any overflow
+            Expanded(
+              child: Center(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    child: _buildThemedCardSurface(
+                      isWallpaper: true,
+                      isSquare: false,
+                      isInline: true,
+                    ),
                   ),
                 ),
-                Text(
-                  insight.formattedDateUpper,
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w500,
-                    color: spec.mutedTextColor,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
 
-        // Lockscreen clock breathing room (top ~24% of 9:16 screen)
-        const Spacer(flex: 3),
+            SizedBox(height: bottomSpacing),
 
-        // Framed or floating editorial centerpiece
-        Flexible(
-          flex: 9,
-          child: Center(
-            child: _buildThemedCardSurface(
-              isWallpaper: true,
-              isSquare: false,
-              isInline: false,
-            ),
-          ),
-        ),
-
-        const Spacer(flex: 2),
-
-        // Bottom subtle colophon in wallpaper mode
-        if (colophon != EditorialColophonStyle.none)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: _buildColophonFooter(spec, centered: true),
-          ),
-      ],
+            // Bottom subtle colophon in wallpaper mode
+            if (colophon != EditorialColophonStyle.none)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: _buildColophonFooter(spec, centered: true),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -973,24 +1049,7 @@ class EditorialInsightCardCanvas extends StatelessWidget {
       ),
     );
 
-    if (isInline) {
-      return cardContent;
-    }
-
-    // Ensure non-inline export canvases never overflow regardless of user text length
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: constraints.maxWidth,
-            ),
-            child: cardContent,
-          ),
-        );
-      },
-    );
+    return cardContent;
   }
 
   Widget _buildMasthead(_ThemeVisualSpec spec, {required bool showDate}) {
@@ -999,39 +1058,51 @@ class EditorialInsightCardCanvas extends StatelessWidget {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: spec.primaryAccent,
-                    shape: BoxShape.circle,
+            Flexible(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: spec.primaryAccent,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 7),
-                Text(
-                  'THE EVENING DISPATCH',
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      'THE EVENING DISPATCH',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.3,
+                        color: spec.primaryAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (showDate) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  insight.formattedDateUpper,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.ibmPlexMono(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.3,
-                    color: spec.primaryAccent,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.0,
+                    color: spec.mutedTextColor,
                   ),
                 ),
-              ],
-            ),
-            if (showDate)
-              Text(
-                insight.formattedDateUpper,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1.0,
-                  color: spec.mutedTextColor,
-                ),
               ),
+            ],
           ],
         );
 
@@ -1039,36 +1110,48 @@ class EditorialInsightCardCanvas extends StatelessWidget {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 12,
-                  color: spec.primaryAccent,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'NOCTURNE SYNTHESIS',
-                  style: GoogleFonts.ibmPlexMono(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: 1.6,
+            Flexible(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 12,
                     color: spec.primaryAccent,
                   ),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'NOCTURNE SYNTHESIS',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 1.6,
+                        color: spec.primaryAccent,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            if (showDate)
-              Text(
-                insight.formattedDateUpper,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 1.2,
-                  color: spec.mutedTextColor,
+            if (showDate) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  insight.formattedDateUpper,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.ibmPlexMono(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 1.2,
+                    color: spec.mutedTextColor,
+                  ),
                 ),
               ),
+            ],
           ],
         );
 
@@ -1076,47 +1159,59 @@ class EditorialInsightCardCanvas extends StatelessWidget {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.18),
-                  width: 0.8,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    width: 0.8,
+                  ),
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.wb_twilight_rounded,
-                    size: 12,
-                    color: spec.primaryAccent,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    'TWILIGHT NOTE',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
-                      color: spec.headlineColor,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.wb_twilight_rounded,
+                      size: 12,
+                      color: spec.primaryAccent,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        'TWILIGHT NOTE',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                          color: spec.headlineColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            if (showDate)
-              Text(
-                insight.formattedDateUpper,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 1.1,
-                  color: spec.mutedTextColor,
+            if (showDate) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  insight.formattedDateUpper,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.ibmPlexMono(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 1.1,
+                    color: spec.mutedTextColor,
+                  ),
                 ),
               ),
+            ],
           ],
         );
 
@@ -1124,36 +1219,48 @@ class EditorialInsightCardCanvas extends StatelessWidget {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  color: spec.primaryAccent,
-                ),
-                const SizedBox(width: 7),
-                Text(
-                  'INDEX / ${insight.issueNumber}',
+            Flexible(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    color: spec.primaryAccent,
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      'INDEX / ${insight.issueNumber}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.ibmPlexMono(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                        color: spec.headlineColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (showDate) ...[
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  insight.formattedDateUpper,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.ibmPlexMono(
                     fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: spec.headlineColor,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.8,
+                    color: spec.mutedTextColor,
                   ),
                 ),
-              ],
-            ),
-            if (showDate)
-              Text(
-                insight.formattedDateUpper,
-                style: GoogleFonts.ibmPlexMono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.8,
-                  color: spec.mutedTextColor,
-                ),
               ),
+            ],
           ],
         );
     }
@@ -1195,8 +1302,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           insight.mainInsight,
-          maxLines: isSquare ? 5 : 7,
-          overflow: TextOverflow.ellipsis,
           style: spec.quoteDisplayStyle(fontSize: isSquare ? 18.5 : 21),
         ),
         const SizedBox(height: 18),
@@ -1211,8 +1316,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
             Expanded(
               child: Text(
                 insight.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: spec.subheadStyle(fontSize: 13),
               ),
             ),
@@ -1230,15 +1333,11 @@ class EditorialInsightCardCanvas extends StatelessWidget {
       children: [
         Text(
           insight.title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
           style: spec.headlineStyle(fontSize: isSquare ? 18 : 20),
         ),
         const SizedBox(height: 14),
         Text(
           insight.mainInsight,
-          maxLines: isSquare ? 4 : 5,
-          overflow: TextOverflow.ellipsis,
           style: spec.bodyStyle(fontSize: isSquare ? 13.5 : 14.5),
         ),
         const SizedBox(height: 16),
@@ -1280,8 +1379,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 insight.suggestion,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
                 style: spec.bodyStyle(fontSize: 13).copyWith(
                       color: spec.headlineColor,
                       fontWeight: FontWeight.w500,
@@ -1300,7 +1397,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
     required bool isSquare,
     required bool isInline,
   }) {
-    final int maxLinesPerSection = isInline ? 10 : (isSquare ? 2 : 3);
     final double sectionGap = isSquare ? 11.0 : 15.0;
 
     return Column(
@@ -1309,10 +1405,8 @@ class EditorialInsightCardCanvas extends StatelessWidget {
       children: [
         Text(
           insight.title,
-          maxLines: isInline ? 4 : 2,
-          overflow: TextOverflow.ellipsis,
           style: spec.headlineStyle(
-            fontSize: isInline ? 21 : (isSquare ? 16.5 : 18.5),
+            fontSize: isInline ? 20.5 : (isSquare ? 16.5 : 18.5),
           ),
         ),
         SizedBox(height: isSquare ? 12 : 16),
@@ -1326,7 +1420,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
           label: 'WHAT STOOD OUT',
           content: insight.standout,
           accentColor: spec.primaryAccent,
-          maxLines: maxLinesPerSection,
           isCompact: isSquare,
         ),
         SizedBox(height: sectionGap),
@@ -1340,7 +1433,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
           label: 'THE UNDERLYING PATTERN',
           content: insight.mainInsight,
           accentColor: spec.secondaryAccent,
-          maxLines: maxLinesPerSection,
           isCompact: isSquare,
         ),
         SizedBox(height: sectionGap),
@@ -1354,7 +1446,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
           label: 'A GENTLE NEXT STEP',
           content: insight.suggestion,
           accentColor: spec.tertiaryAccent,
-          maxLines: maxLinesPerSection,
           isCompact: isSquare,
         ),
       ],
@@ -1367,7 +1458,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
     required String label,
     required String content,
     required Color accentColor,
-    required int maxLines,
     required bool isCompact,
   }) {
     return Column(
@@ -1405,8 +1495,6 @@ class EditorialInsightCardCanvas extends StatelessWidget {
         SizedBox(height: isCompact ? 4 : 5),
         Text(
           content,
-          maxLines: maxLines,
-          overflow: TextOverflow.ellipsis,
           style: spec.bodyStyle(fontSize: isCompact ? 12.5 : 13.8),
         ),
       ],
@@ -1429,6 +1517,8 @@ class EditorialInsightCardCanvas extends StatelessWidget {
       return Center(
         child: Text(
           '$leftText  ·  $rightText',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: GoogleFonts.ibmPlexMono(
             fontSize: 9,
             fontWeight: FontWeight.w500,
@@ -1442,22 +1532,31 @@ class EditorialInsightCardCanvas extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          leftText,
-          style: GoogleFonts.ibmPlexMono(
-            fontSize: 9,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.3,
-            color: spec.mutedTextColor,
+        Flexible(
+          child: Text(
+            leftText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.ibmPlexMono(
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.3,
+              color: spec.mutedTextColor,
+            ),
           ),
         ),
-        Text(
-          rightText,
-          style: GoogleFonts.ibmPlexMono(
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 1.1,
-            color: spec.mutedTextColor.withValues(alpha: 0.8),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            rightText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.ibmPlexMono(
+              fontSize: 9,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 1.1,
+              color: spec.mutedTextColor.withValues(alpha: 0.8),
+            ),
           ),
         ),
       ],

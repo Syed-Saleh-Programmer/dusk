@@ -10,6 +10,7 @@ import '../../providers/app_state.dart';
 import '../../services/notification_service.dart';
 import '../widgets/dusk_logo.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../navigation/dusk_navigation.dart';
 import 'reflection_ready_screen.dart';
 
 /// Full-screen reflection alarm screen designed in Dusk's signature
@@ -94,7 +95,7 @@ class _AlarmScreenState extends State<AlarmScreen>
     if (!mounted) return;
 
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
+      DuskPageRoute.ritual(
         builder: (_) => ReflectionReadyScreen(cycleId: widget.cycleId),
       ),
     );
@@ -207,7 +208,7 @@ class _AlarmScreenState extends State<AlarmScreen>
                               children: [
                                 const Flexible(
                                   child: DuskPillBadge(
-                                    text: 'Evening Ritual',
+                                    text: 'Reflection',
                                     icon: Icons.wb_twilight_rounded,
                                     variant: DuskBadgeVariant.peach,
                                   ),
@@ -376,7 +377,7 @@ class _AlarmScreenState extends State<AlarmScreen>
 
                             // Primary Action: Begin Reflection Ritual
                             DuskPrimaryButton(
-                              label: 'Begin Reflection Ritual',
+                              label: 'Begin Reflection',
                               icon: Icons.arrow_forward_rounded,
                               onPressed: _beginReflection,
                             )
@@ -487,71 +488,107 @@ class _AlarmScreenState extends State<AlarmScreen>
     required int momentCount,
   }) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFF0EBE1)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFEFE8DE)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 14,
+            color: Colors.black.withValues(alpha: 0.035),
+            blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Top Row: Status Indicator & Duration Badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF7A1A),
-                        shape: BoxShape.circle,
-                      ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF7A1A),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        totalCaptures == 1
-                            ? '1 capture in this cycle'
-                            : '$totalCaptures captures in this cycle',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1B1A19),
-                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Reflection Cycle',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1B1A19),
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F4EE),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFEFE8DE)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 13,
+                      color: Color(0xFF88827A),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      '~5 min',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6E6862),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              const Text(
-                '~5 min ritual',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF88827A),
-                ),
-              ),
             ],
           ),
+
+          const SizedBox(height: 10),
+
+          // Total Captures Headline
+          Text(
+            totalCaptures == 0
+                ? 'No captures in this cycle'
+                : totalCaptures == 1
+                    ? '1 capture ready to review'
+                    : '$totalCaptures captures ready to review',
+            style: const TextStyle(
+              fontSize: 16.5,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B1A19),
+              letterSpacing: -0.3,
+            ),
+          ),
+
           const SizedBox(height: 14),
           const Divider(height: 1, color: Color(0xFFF3EFE9)),
           const SizedBox(height: 14),
+
+          // 3 Spacious Metric Tiles (No truncation)
           Row(
             children: [
               Expanded(
-                child: _buildCaptureStatChip(
+                child: _buildMetricTile(
                   icon: Icons.notes_rounded,
                   label: 'Thoughts',
                   count: thoughtCount,
@@ -559,9 +596,9 @@ class _AlarmScreenState extends State<AlarmScreen>
                   bgColor: const Color(0xFFFDE8D7),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
-                child: _buildCaptureStatChip(
+                child: _buildMetricTile(
                   icon: Icons.graphic_eq_rounded,
                   label: 'Voice',
                   count: voiceCount,
@@ -569,9 +606,9 @@ class _AlarmScreenState extends State<AlarmScreen>
                   bgColor: const Color(0xFFE6F0FC),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
-                child: _buildCaptureStatChip(
+                child: _buildMetricTile(
                   icon: Icons.image_rounded,
                   label: 'Moments',
                   count: momentCount,
@@ -586,7 +623,7 @@ class _AlarmScreenState extends State<AlarmScreen>
     );
   }
 
-  Widget _buildCaptureStatChip({
+  Widget _buildMetricTile({
     required IconData icon,
     required String label,
     required int count,
@@ -594,48 +631,43 @@ class _AlarmScreenState extends State<AlarmScreen>
     required Color bgColor,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
       decoration: BoxDecoration(
         color: const Color(0xFFFAF7F2),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: const Color(0xFFF0EBE1)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 28,
-            height: 28,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
               color: bgColor,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, size: 15, color: iconColor),
+            child: Icon(icon, size: 17, color: iconColor),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$count',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF1B1A19),
-                    height: 1.1,
-                  ),
-                ),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF88827A),
-                  ),
-                ),
-              ],
+          const SizedBox(height: 8),
+          Text(
+            '$count',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF1B1A19),
+              height: 1.1,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            maxLines: 1,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF6E6862),
             ),
           ),
         ],

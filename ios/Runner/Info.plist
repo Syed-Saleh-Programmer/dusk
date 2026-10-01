@@ -24,6 +24,25 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Dusk uses your microphone to capture voice dumps and record your verbal reflections during evening check-ins.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Dusk uses your camera to capture photos for your daily dumps and visual reflections.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Dusk needs access to your photos to attach images to your dumps and reflections.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.example.dusk</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dusk</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

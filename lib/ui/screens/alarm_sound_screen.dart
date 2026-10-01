@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/alarm_sound.dart';
 import '../../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
 
 /// Dedicated screen allowing the user to preview and select their preferred alarm sound
@@ -113,7 +114,7 @@ class _AlarmSoundScreenState extends State<AlarmSoundScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: AppTheme.backgroundColor,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: SingleChildScrollView(
@@ -124,43 +125,50 @@ class _AlarmSoundScreenState extends State<AlarmSoundScreen> {
               children: [
                 // Top App Bar row with Dusk Circle Back Button
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     DuskCircleButton(
                       icon: Icons.arrow_back_rounded,
+                      size: 38,
+                      iconSize: 17,
                       tooltip: 'Back',
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    const Flexible(
-                      child: DuskPillBadge(
-                        text: 'Ritual Tone',
-                        variant: DuskBadgeVariant.peach,
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        'Alarm Sound',
+                        style: TextStyle(
+                          fontSize: 17.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B1A19),
+                          letterSpacing: -0.3,
+                        ),
                       ),
                     ),
                   ],
                 ).animate().fadeIn(duration: 400.ms),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
                 // Title & Subtitle
                 const Text(
                   'Choose your alarm sound',
                   style: TextStyle(
-                    fontSize: 26,
+                    fontSize: 22,
                     fontWeight: FontWeight.w800,
                     color: Color(0xFF1B1A19),
-                    letterSpacing: -0.5,
+                    letterSpacing: -0.4,
                     height: 1.25,
                   ),
                   textAlign: TextAlign.center,
                 ).animate().fadeIn(duration: 500.ms).slideY(begin: 0.08),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
 
                 const Text(
-                  'Tap a tone to preview and set for your evening reflection ritual.',
+                  'Tap a tone to preview and set for your reflection.',
                   style: TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 13,
                     color: Color(0xFF88827A),
                     height: 1.4,
                   ),
@@ -191,19 +199,19 @@ class _AlarmSoundScreenState extends State<AlarmSoundScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFFFFF8F2)
+                                ? AppTheme.primarySoftBg
                                 : Colors.white,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
                               color: isSelected
-                                  ? const Color(0xFFFF7A1A)
+                                  ? AppTheme.primaryColor
                                   : const Color(0xFFEFE8DE),
                               width: isSelected ? 2.0 : 1.0,
                             ),
                             boxShadow: [
                               BoxShadow(
                                 color: isSelected
-                                    ? const Color(0xFFFF7A1A).withValues(alpha: 0.08)
+                                    ? AppTheme.primaryColor.withValues(alpha: 0.08)
                                     : Colors.black.withValues(alpha: 0.02),
                                 blurRadius: 10,
                                 offset: const Offset(0, 3),
@@ -217,7 +225,7 @@ class _AlarmSoundScreenState extends State<AlarmSoundScreen> {
                                 height: 42,
                                 decoration: BoxDecoration(
                                   color: isSelected
-                                      ? const Color(0xFFFDE8D7)
+                                      ? AppTheme.primaryContainer
                                       : const Color(0xFFF5F1EA),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -225,7 +233,7 @@ class _AlarmSoundScreenState extends State<AlarmSoundScreen> {
                                   sound.icon,
                                   size: 20,
                                   color: isSelected
-                                      ? const Color(0xFFFF7A1A)
+                                      ? AppTheme.primaryColor
                                       : const Color(0xFF6E6862),
                                 ),
                               ),
@@ -274,7 +282,7 @@ class _AlarmSoundScreenState extends State<AlarmSoundScreen> {
                                 tooltip: isPlaying ? 'Stop preview' : 'Preview sound',
                                 style: IconButton.styleFrom(
                                   backgroundColor: isPlaying
-                                      ? const Color(0xFFFF7A1A)
+                                      ? AppTheme.primaryColor
                                       : const Color(0xFFFAF6F0),
                                   minimumSize: const Size(38, 38),
                                   padding: EdgeInsets.zero,

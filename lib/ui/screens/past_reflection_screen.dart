@@ -7,6 +7,7 @@ import '../../models/task_item.dart';
 import '../../providers/app_state.dart';
 import '../widgets/dusk_ui_components.dart';
 import '../widgets/editorial_insight_card.dart';
+import '../navigation/dusk_navigation.dart';
 import 'share_insight_screen.dart';
 import 'tasks_screen.dart';
 
@@ -22,7 +23,6 @@ class PastReflectionScreen extends StatefulWidget {
 class _PastReflectionScreenState extends State<PastReflectionScreen> {
   final GlobalKey _inlineCardKey = GlobalKey();
   EditorialThemeId _selectedTheme = EditorialThemeId.warmPaper;
-  bool _isQuickSharing = false;
   bool _isSummaryExpanded = false;
   bool _isQAExpanded = false;
 
@@ -66,43 +66,19 @@ class _PastReflectionScreenState extends State<PastReflectionScreen> {
     setState(() => _selectedTheme = saved);
   }
 
-  void _openStudio({EditorialCardFormat? initialFormat}) {
+  Future<void> _openShare() async {
     HapticFeedback.selectionClick();
-    Navigator.of(context).push(
-      MaterialPageRoute(
+    final newTheme = await Navigator.of(context).push<EditorialThemeId>(
+      DuskPageRoute.modalSheet(
         builder: (_) => ShareInsightScreen(
           insight: widget.insight,
           initialTheme: _selectedTheme,
-          initialFormat: initialFormat,
         ),
       ),
     );
-  }
-
-  Future<void> _quickShareImage() async {
-    if (_isQuickSharing) return;
-    HapticFeedback.mediumImpact();
-    setState(() => _isQuickSharing = true);
-    try {
-      final box = context.findRenderObject() as RenderBox?;
-      final origin =
-          (box != null && box.hasSize) ? (box.localToGlobal(Offset.zero) & box.size) : null;
-
-      await InsightCardExportService.shareAsImage(
-        boundaryKey: _inlineCardKey,
-        insight: _insightData,
-        theme: _selectedTheme,
-        format: EditorialCardFormat.editorialCard,
-        sharePositionOrigin: origin,
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not share insight image: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isQuickSharing = false);
+    if (newTheme != null && mounted) {
+      setState(() => _selectedTheme = newTheme);
+      EditorialStudioPreferences.savePreferredTheme(newTheme);
     }
   }
 
@@ -145,26 +121,33 @@ class _PastReflectionScreenState extends State<PastReflectionScreen> {
                   children: [
                     DuskCircleButton(
                       icon: Icons.arrow_back_rounded,
-                      size: 40,
-                      iconSize: 19,
+                      size: 38,
+                      iconSize: 17,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    Text(
-                      dateTitle,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B1A19),
-                        letterSpacing: -0.2,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        dateTitle,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B1A19),
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 12),
                     DuskCircleButton(
                       icon: Icons.ios_share_rounded,
-                      size: 40,
-                      iconSize: 18,
-                      iconColor: const Color(0xFFFF7A1A),
-                      tooltip: 'Editorial Studio & Share',
-                      onTap: _openStudio,
+                      size: 38,
+                      iconSize: 17,
+                      iconColor: const Color(0xFF1B1A19),
+                      tooltip: 'Share Reflection',
+                      onTap: _openShare,
                     ),
                   ],
                 ),
@@ -177,17 +160,6 @@ class _PastReflectionScreenState extends State<PastReflectionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Editorial Theme Bar for the Insight Card
-                      EditorialThemeSelectorBar(
-                        selectedTheme: _selectedTheme,
-                        compact: true,
-                        onThemeSelected: (theme) {
-                          setState(() => _selectedTheme = theme);
-                          EditorialStudioPreferences.savePreferredTheme(theme);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-
                       // Section 1: The Historical Insight Card rendered in the selected Editorial Theme
                       RepaintBoundary(
                         key: _inlineCardKey,
@@ -208,73 +180,35 @@ class _PastReflectionScreenState extends State<PastReflectionScreen> {
 
                       const SizedBox(height: 14),
 
-                      // Studio & Wallpaper Export Action Strip
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _openStudio,
-                              icon: const Icon(
-                                Icons.auto_fix_high_rounded,
-                                size: 17,
-                                color: Color(0xFF1B1A19),
-                              ),
-                              label: const Text(
-                                'Editorial Studio',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1B1A19),
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                side: const BorderSide(color: Color(0xFFE5DFD4)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(22),
-                                ),
-                              ),
+                      // Single Clean Share Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: _openShare,
+                          icon: const Icon(
+                            Icons.ios_share_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                          label: const Text(
+                            'Share Reflection',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.2,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => _openStudio(
-                                initialFormat: EditorialCardFormat.wallpaper9x16,
-                              ),
-                              icon: const Icon(
-                                Icons.stay_current_portrait_rounded,
-                                size: 17,
-                                color: Color(0xFFFF7A1A),
-                              ),
-                              label: const Text(
-                                'Wallpaper 9:16',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF1B1A19),
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                side: const BorderSide(color: Color(0xFFE5DFD4)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(22),
-                                ),
-                              ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF1B1A19),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(25),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          DuskCircleButton(
-                            icon: Icons.ios_share_rounded,
-                            size: 44,
-                            iconSize: 18,
-                            tooltip: 'Quick Share Image',
-                            onTap: _isQuickSharing ? null : _quickShareImage,
-                          ),
-                        ],
+                        ),
                       ),
 
                       const SizedBox(height: 14),
@@ -298,13 +232,17 @@ class _PastReflectionScreenState extends State<PastReflectionScreen> {
                                   color: Color(0xFF389F7F),
                                 ),
                                 SizedBox(width: 8),
-                                Text(
-                                  'GENTLE NEXT STEP • ACTION TRAY',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.9,
-                                    color: Color(0xFF389F7F),
+                                Expanded(
+                                  child: Text(
+                                    'GENTLE NEXT STEP • ACTION TRAY',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0.9,
+                                      color: Color(0xFF389F7F),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -348,7 +286,7 @@ class _PastReflectionScreenState extends State<PastReflectionScreen> {
                                 GestureDetector(
                                   onTap: () {
                                     Navigator.of(context).push(
-                                      MaterialPageRoute(
+                                      DuskPageRoute.perspectiveSlide(
                                         builder: (_) => const TasksScreen(
                                           showBackButton: true,
                                         ),

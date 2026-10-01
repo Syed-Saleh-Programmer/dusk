@@ -9,15 +9,22 @@ import '../../models/alarm_sound.dart';
 import '../../providers/app_state.dart';
 import '../../services/supabase_service.dart';
 import '../../services/notification_service.dart';
-import 'alarm_sound_screen.dart';
-import 'paywall_screen.dart';
-import 'privacy_screen.dart';
-import 'auth_screen.dart';
-import 'edit_reflection_schedule_screen.dart';
-import 'user_profile_screen.dart';
-import 'onboarding_screen.dart';
-import 'profile_setup_screen.dart';
+import '../navigation/dusk_navigation.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
+import 'alarm_sound_screen.dart';
+import 'auth_screen.dart';
+import 'customization_settings_screen.dart';
+import 'data_storage_settings_screen.dart';
+import 'edit_reflection_schedule_screen.dart';
+import 'evening_ritual_settings_screen.dart';
+import 'home_widgets_screen.dart';
+import 'onboarding_screen.dart';
+import 'paywall_screen.dart';
+import 'permissions_settings_screen.dart';
+import 'privacy_screen.dart';
+import 'profile_setup_screen.dart';
+import 'user_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool showBackButton;
@@ -41,7 +48,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Map<Permission, PermissionStatus> _permissionStatuses = {};
   bool _permissionsLoaded = false;
 
-  // The permissions this app uses
   static final List<_PermissionItem> _permissionItems = [
     _PermissionItem(
       permission: Permission.microphone,
@@ -94,60 +100,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _requestPermission(_PermissionItem item) async {
-    final currentStatus = _permissionStatuses[item.permission];
-
-    if (currentStatus == PermissionStatus.permanentlyDenied ||
-        currentStatus == PermissionStatus.restricted) {
-      // Can't request again — must go to system settings
-      final opened = await openAppSettings();
-      if (opened) {
-        // Reload permission statuses when user returns
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) _loadPermissions();
-        });
-      }
-      return;
-    }
-
-    // For scheduleExactAlarm on Android 12+, must open special settings
-    if (item.permission == Permission.scheduleExactAlarm &&
-        currentStatus != PermissionStatus.granted) {
-      final status = await item.permission.request();
-      if (mounted) {
-        setState(() {
-          _permissionStatuses[item.permission] = status;
-        });
-      }
-      return;
-    }
-
-    final status = await item.permission.request();
-    if (mounted) {
-      setState(() {
-        _permissionStatuses[item.permission] = status;
-      });
-
-      // If notification was just granted, re-schedule any pending reminders
-      if (item.permission == Permission.notification &&
-          status == PermissionStatus.granted) {
-        NotificationService().scheduleNextCadenceReminder();
-      }
-    }
-  }
-
-  Future<void> _requestAllPermissions() async {
-    for (final item in _permissionItems) {
-      final status = _permissionStatuses[item.permission];
-      if (status != PermissionStatus.granted) {
-        await _requestPermission(item);
-        // Small delay between requests so dialogs don't stack
-        await Future.delayed(const Duration(milliseconds: 300));
-      }
-    }
-    await _loadPermissions();
-  }
-
   Future<void> _loadScheduleSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -165,23 +117,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         });
       }
     } catch (_) {}
-  }
-
-  Future<void> _openAlarmSoundScreen() async {
-    final chosen = await Navigator.of(context).push<AlarmSound>(
-      MaterialPageRoute(
-        builder: (_) => AlarmSoundScreen(
-          initialSound: _selectedAlarmSound,
-        ),
-      ),
-    );
-    if (chosen != null && mounted) {
-      setState(() {
-        _selectedAlarmSound = chosen;
-      });
-    } else {
-      _loadScheduleSettings();
-    }
   }
 
   String _getFrequencyText(int days) {
@@ -211,69 +146,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }
         }
         final double mb = totalBytes / (1024 * 1024);
-        setState(() {
-          if (mb < 0.1) {
-            _cacheSizeStr = '< 0.1 MB';
-          } else {
-            _cacheSizeStr = '${mb.toStringAsFixed(1)} MB';
-          }
-        });
+        if (mounted) {
+          setState(() {
+            if (mb < 0.1) {
+              _cacheSizeStr = '< 0.1 MB';
+            } else {
+              _cacheSizeStr = '${mb.toStringAsFixed(1)} MB';
+            }
+          });
+        }
       } else {
+        if (mounted) {
+          setState(() {
+            _cacheSizeStr = '0 MB';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _cacheSizeStr = '0 MB';
+          _cacheSizeStr = 'Unknown';
         });
-      }
-    } catch (e) {
-      setState(() {
-        _cacheSizeStr = 'Unknown';
-      });
-    }
-  }
-
-  Future<void> _clearCache() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final cacheDir = Directory('${directory.path}/audio_dumps');
-      if (await cacheDir.exists()) {
-        await cacheDir.delete(recursive: true);
-        await cacheDir.create();
-      }
-      _calculateCacheSize();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Audio cache cleared')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error clearing cache: $e')),
-        );
       }
     }
   }
 
   Widget _buildSectionHeader(String title) {
+    final p = AppTheme.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(6, 20, 6, 8),
       child: Text(
         title.toUpperCase(),
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 1.0,
-          color: Color(0xFF88827A),
+          color: p.onSurfaceVariant,
         ),
       ),
     );
   }
 
   Widget _buildCardContainer({required List<Widget> children}) {
+    final p = AppTheme.palette;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: p.surface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFF0EBE1)),
+        border: Border.all(color: p.outline),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -297,13 +217,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final p = AppTheme.of(context);
     final user = SupabaseService().currentUser;
     final fullName = appState.preferredName.isNotEmpty
         ? appState.preferredName
         : ((user?.userMetadata?['full_name'] as String?) ?? 'User');
     final profession = appState.profession;
     final dob = appState.dob;
-    final email = user?.email ?? 'mindful@dusk.app';
+    final email = user?.email ?? 'Free User (Local Vault • No Account)';
     final firstLetter = fullName.isNotEmpty ? fullName[0].toUpperCase() : 'D';
 
     ImageProvider? avatarProvider;
@@ -315,10 +236,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       avatarProvider = NetworkImage(appState.avatarUrl!);
     }
 
-    final timeString = _scheduleTime.format(context);
+    final grantedCount = _permissionStatuses.values
+        .where((s) => s == PermissionStatus.granted)
+        .length;
+    final totalPerms = _permissionItems.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: p.background,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: Column(
@@ -340,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
+                        children: [
                           Text(
                             'Settings',
                             maxLines: 1,
@@ -348,18 +272,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
-                              color: Color(0xFF1B1A19),
+                              color: p.onSurface,
                               letterSpacing: -0.3,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Profile, reflection ritual & preferences',
+                            'Customization, ritual, permissions & account',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12.5,
-                              color: Color(0xFF88827A),
+                              color: p.onSurfaceVariant,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -376,13 +300,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   children: [
                     // Interactive Profile Card (Taps into UserProfileScreen)
                     Material(
-                      color: Colors.white,
+                      color: p.surface,
                       borderRadius: BorderRadius.circular(24),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(24),
                         onTap: () {
                           Navigator.of(context).push(
-                            MaterialPageRoute(
+                            DuskPageRoute.perspectiveSlide(
                               builder: (_) => const UserProfileScreen(),
                             ),
                           );
@@ -391,7 +315,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: const Color(0xFFF0EBE1)),
+                            border: Border.all(color: p.outline),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.03),
@@ -410,10 +334,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     height: 64,
                                     decoration: BoxDecoration(
                                       gradient: avatarProvider == null
-                                          ? const LinearGradient(
+                                          ? LinearGradient(
                                               colors: [
-                                                Color(0xFFFF9548),
-                                                Color(0xFFFF7A1A),
+                                                p.primary,
+                                                p.primaryDark,
                                               ],
                                               begin: Alignment.topLeft,
                                               end: Alignment.bottomRight,
@@ -447,10 +371,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       width: 24,
                                       height: 24,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF1B1A19),
+                                        color: p.onSurface,
                                         shape: BoxShape.circle,
                                         border: Border.all(
-                                          color: Colors.white,
+                                          color: p.surface,
                                           width: 2,
                                         ),
                                       ),
@@ -475,17 +399,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             fullName,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 17,
                                               fontWeight: FontWeight.w800,
-                                              color: Color(0xFF1B1A19),
+                                              color: p.onSurface,
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 8),
-                                        const DuskPillBadge(
-                                          text: 'Free Plan',
-                                          variant: DuskBadgeVariant.neutral,
+                                        DuskPillBadge(
+                                          text: appState.isPro ? 'Pro Member' : 'Free Plan',
+                                          variant: appState.isPro
+                                              ? DuskBadgeVariant.green
+                                              : DuskBadgeVariant.neutral,
                                         ),
                                       ],
                                     ),
@@ -494,9 +420,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       email,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12.5,
-                                        color: Color(0xFF88827A),
+                                        color: p.onSurfaceVariant,
                                       ),
                                     ),
                                     if (profession.isNotEmpty || dob != null) ...[
@@ -513,8 +439,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                             ),
                                           if (dob != null)
                                             DuskPillBadge(
-                                              text: DateFormat('MMM d, yyyy')
-                                                  .format(dob),
+                                              text: DateFormat('MMM d, yyyy').format(dob),
                                               variant: DuskBadgeVariant.green,
                                               icon: Icons.cake_outlined,
                                             ),
@@ -525,9 +450,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              const Icon(
+                              Icon(
                                 Icons.chevron_right_rounded,
-                                color: Color(0xFFA59F95),
+                                color: p.onSurfaceVariant,
                               ),
                             ],
                           ),
@@ -535,325 +460,396 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
 
-                    _buildSectionHeader('Reflection Ritual'),
+                    // SECTION 1: APP CUSTOMIZATION
+                    _buildSectionHeader('App Customization & Look'),
                     _buildCardContainer(
                       children: [
                         ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.schedule_rounded, color: Color(0xFFFF7A1A)),
-                          title: const Text(
-                            'Reflection Schedule',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.primarySoftBg,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.palette_outlined, color: p.primary, size: 20),
+                          ),
+                          title: Text(
+                            'App Theme & Appearance',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
                           ),
                           subtitle: Text(
-                            '${_getFrequencyText(_scheduleFrequency)} at $timeString',
-                            style: const TextStyle(color: Color(0xFF88827A), fontSize: 13),
+                            appState.colorTheme.displayName,
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
                           ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
-                          onTap: () async {
-                            final updated = await Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const EditReflectionScheduleScreen()),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 14,
+                                height: 14,
+                                decoration: BoxDecoration(
+                                  color: appState.colorTheme.palette.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: p.outline, width: 1.5),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                            ],
+                          ),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              DuskPageRoute.perspectiveSlide(
+                                builder: (_) => const CustomizationSettingsScreen(),
+                              ),
                             );
-                            if (updated == true) {
-                              _loadScheduleSettings();
-                            }
                           },
                         ),
-                        const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
+                        Divider(height: 1, indent: 18, endIndent: 18, color: p.outline),
                         ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.music_note_rounded, color: Color(0xFFFF7A1A)),
-                          title: const Text(
-                            'Alarm Sound',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.secondaryContainer,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.widgets_outlined, color: p.secondary, size: 20),
+                          ),
+                          title: Text(
+                            'Home Screen Widgets',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
                           ),
                           subtitle: Text(
-                            '${_selectedAlarmSound.name} · ${_selectedAlarmSound.tag}',
-                            style: const TextStyle(color: Color(0xFF88827A), fontSize: 13),
+                            'Quick Capture & Analytics widget setups',
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
                           ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
-                          onTap: _openAlarmSoundScreen,
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              DuskPageRoute.perspectiveSlide(
+                                builder: (_) => const HomeWidgetsScreen(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
 
-                    _buildSectionHeader('App Permissions'),
+                    // SECTION 2: EVENING RITUAL
+                    _buildSectionHeader('Evening Ritual & Alarm'),
                     _buildCardContainer(
                       children: [
-                        if (!_permissionsLoaded)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 20),
-                            child: Center(
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF7A1A)),
-                                ),
-                              ),
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.primarySoftBg,
+                              borderRadius: BorderRadius.circular(11),
                             ),
-                          )
-                        else ...[
-                          ..._permissionItems.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final item = entry.value;
-                            final status = _permissionStatuses[item.permission];
-                            final isGranted = status == PermissionStatus.granted;
-                            final isPermanentlyDenied = status == PermissionStatus.permanentlyDenied;
-
-                            return Column(
-                              children: [
-                                if (index > 0)
-                                  const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
-                                ListTile(
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                                  leading: Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      color: item.color.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Icon(item.icon, color: item.color, size: 20),
-                                  ),
-                                  title: Text(
-                                    item.label,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
-                                  ),
-                                  subtitle: Text(
-                                    isGranted ? 'Granted' : (isPermanentlyDenied ? 'Denied — tap to open settings' : item.subtitle),
-                                    style: TextStyle(
-                                      color: isGranted ? const Color(0xFF6BBF59) : const Color(0xFF88827A),
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                  trailing: isGranted
-                                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF6BBF59), size: 22)
-                                      : Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: isPermanentlyDenied
-                                                ? const Color(0xFFFFF0E6)
-                                                : const Color(0xFFF5F3EE),
-                                            borderRadius: BorderRadius.circular(20),
-                                            border: Border.all(
-                                              color: isPermanentlyDenied
-                                                  ? const Color(0xFFFF7A1A).withValues(alpha: 0.3)
-                                                  : const Color(0xFFE8E2D8),
-                                            ),
-                                          ),
-                                          child: Text(
-                                            isPermanentlyDenied ? 'Settings' : 'Grant',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: isPermanentlyDenied
-                                                  ? const Color(0xFFFF7A1A)
-                                                  : const Color(0xFF1B1A19),
-                                            ),
-                                          ),
-                                        ),
-                                  onTap: isGranted ? null : () => _requestPermission(item),
-                                ),
-                              ],
+                            child: Icon(Icons.nightlight_round_sharp, color: p.primary, size: 20),
+                          ),
+                          title: Text(
+                            'Evening Reflection Ritual',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
+                          ),
+                          subtitle: Text(
+                            '${_getFrequencyText(_scheduleFrequency)} at ${_scheduleTime.format(context)} • ${_selectedAlarmSound.name}',
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
+                          ),
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              DuskPageRoute.perspectiveSlide(
+                                builder: (_) => const EveningRitualSettingsScreen(),
+                              ),
                             );
-                          }),
-                          // "Grant All" button if any permission is not granted
-                          if (_permissionStatuses.values.any((s) => s != PermissionStatus.granted)) ...[
-                            const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
-                            ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                              leading: const Icon(Icons.security_rounded, color: Color(0xFFFF7A1A)),
-                              title: const Text(
-                                'Grant All Permissions',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14.5,
-                                  color: Color(0xFFFF7A1A),
-                                ),
-                              ),
-                              subtitle: Text(
-                                '${_permissionStatuses.values.where((s) => s != PermissionStatus.granted).length} permission(s) needed',
-                                style: const TextStyle(color: Color(0xFF88827A), fontSize: 12.5),
-                              ),
-                              trailing: const Icon(Icons.arrow_forward_rounded, color: Color(0xFFFF7A1A), size: 20),
-                              onTap: _requestAllPermissions,
-                            ),
-                          ],
-                        ],
+                            _loadScheduleSettings();
+                          },
+                        ),
                       ],
                     ),
 
-                    _buildSectionHeader('Subscription & Upgrades'),
+                    // SECTION 3: SYSTEM PERMISSIONS
+                    _buildSectionHeader('Permissions & Device Access'),
+                    _buildCardContainer(
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.tertiaryContainer,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.verified_user_outlined, color: p.tertiary, size: 20),
+                          ),
+                          title: Text(
+                            'Permissions Manager',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _permissionsLoaded
+                                ? '$grantedCount of $totalPerms permissions granted'
+                                : 'Microphone, Camera, Notifications & Alarms',
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              DuskPillBadge(
+                                text: _permissionsLoaded && grantedCount == totalPerms
+                                    ? 'All Active'
+                                    : '$grantedCount/$totalPerms',
+                                variant: _permissionsLoaded && grantedCount == totalPerms
+                                    ? DuskBadgeVariant.green
+                                    : DuskBadgeVariant.neutral,
+                              ),
+                              const SizedBox(width: 8),
+                              Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                            ],
+                          ),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              DuskPageRoute.perspectiveSlide(
+                                builder: (_) => const PermissionsSettingsScreen(),
+                              ),
+                            );
+                            _loadPermissions();
+                          },
+                        ),
+                      ],
+                    ),
+
+                    // SECTION 4: DATA & PRIVACY
+                    _buildSectionHeader('Data & Storage Vault'),
+                    _buildCardContainer(
+                      children: [
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.secondaryContainer,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.storage_rounded, color: p.secondary, size: 20),
+                          ),
+                          title: Text(
+                            'Data & Storage Vault',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Audio dumps cache: $_cacheSizeStr',
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
+                          ),
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                          onTap: () async {
+                            await Navigator.of(context).push(
+                              DuskPageRoute.perspectiveSlide(
+                                builder: (_) => const DataStorageSettingsScreen(),
+                              ),
+                            );
+                            _calculateCacheSize();
+                          },
+                        ),
+                        Divider(height: 1, indent: 18, endIndent: 18, color: p.outline),
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                          leading: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: p.secondaryContainer,
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Icon(Icons.security_rounded, color: p.secondary, size: 20),
+                          ),
+                          title: Text(
+                            'Privacy & Security Architecture',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Zero telemetry & local device encryption',
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
+                          ),
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              DuskPageRoute.perspectiveSlide(
+                                builder: (_) => const PrivacyScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+
+                    // SECTION 5: MEMBERSHIP & PREVIEWS
+                    _buildSectionHeader('Subscription & Previews'),
                     GestureDetector(
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const PaywallScreen()),
+                          DuskPageRoute.modalSheet(
+                            builder: (_) => const PaywallScreen(),
+                          ),
                         );
                       },
                       child: Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFDE8D7).withValues(alpha: 0.6),
+                          color: p.primarySoftBg,
                           borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: const Color(0xFFFF7A1A).withValues(alpha: 0.3)),
+                          border: Border.all(color: p.primary.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
                             Container(
                               padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
+                              decoration: BoxDecoration(
+                                color: p.surface,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.star_rounded, color: Color(0xFFFF7A1A), size: 22),
+                              child: Icon(Icons.star_rounded, color: p.primary, size: 22),
                             ),
                             const SizedBox(width: 14),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
+                                children: [
                                   Text(
                                     'Upgrade to Dusk Pro',
                                     style: TextStyle(
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                       fontSize: 15,
-                                      color: Color(0xFF1B1A19),
+                                      color: p.onSurface,
                                     ),
                                   ),
-                                  SizedBox(height: 2),
+                                  const SizedBox(height: 2),
                                   Text(
                                     'Unlock infinite history & AI synthesis',
-                                    style: TextStyle(color: Color(0xFF6E6862), fontSize: 12.5),
+                                    style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5),
                                   ),
                                 ],
                               ),
                             ),
-                            const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFFF7A1A), size: 16),
+                            Icon(Icons.arrow_forward_ios_rounded, color: p.primary, size: 16),
                           ],
                         ),
                       ),
                     ),
 
-                    _buildSectionHeader('Privacy & Data'),
+                    const SizedBox(height: 12),
                     _buildCardContainer(
                       children: [
                         ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.security_rounded, color: Color(0xFF4A84D8)),
-                          title: const Text(
-                            'Privacy & Data Architecture',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
-                          ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const PrivacyScreen()),
-                            );
-                          },
-                        ),
-                        const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.cleaning_services_outlined, color: Color(0xFF4A84D8)),
-                          title: const Text(
-                            'Clear Local Audio Cache',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                          leading: Icon(Icons.auto_stories_outlined, color: p.secondary),
+                          title: Text(
+                            'Replay Welcome Onboarding',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
                           ),
                           subtitle: Text(
-                            _cacheSizeStr,
-                            style: const TextStyle(color: Color(0xFF88827A), fontSize: 13),
-                          ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
-                          onTap: _clearCache,
-                        ),
-                      ],
-                    ),
-
-                    _buildSectionHeader('Account & Session'),
-                    _buildCardContainer(
-                      children: [
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.person_outline_rounded, color: Color(0xFFFF7A1A)),
-                          title: const Text(
-                            'Personal Profile',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
-                          ),
-                          subtitle: const Text(
-                            'Update preferred name, profession, DOB & photo',
-                            style: TextStyle(color: Color(0xFF88827A), fontSize: 12.5),
-                          ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const UserProfileScreen()),
-                            );
-                          },
-                        ),
-                        const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.auto_stories_outlined, color: Color(0xFF4A84D8)),
-                          title: const Text(
-                            'Replay Welcome Onboarding',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
-                          ),
-                          subtitle: const Text(
                             'Preview the 4-step Dusk introduction',
-                            style: TextStyle(color: Color(0xFF88827A), fontSize: 12.5),
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5),
                           ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
                           onTap: () {
                             Navigator.of(context).push(
-                              MaterialPageRoute(
+                              DuskPageRoute.flowProgression(
                                 builder: (_) => const OnboardingScreen(isPreview: true),
                               ),
                             );
                           },
                         ),
-                        const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
+                        Divider(height: 1, indent: 18, endIndent: 18, color: p.outline),
                         ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: const Icon(Icons.badge_outlined, color: Color(0xFF2DC48D)),
-                          title: const Text(
+                          leading: Icon(Icons.badge_outlined, color: p.tertiary),
+                          title: Text(
                             'First-Signup Profile Setup',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
                           ),
-                          subtitle: const Text(
+                          subtitle: Text(
                             '"What should I call you?" onboarding screen',
-                            style: TextStyle(color: Color(0xFF88827A), fontSize: 12.5),
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 12.5),
                           ),
-                          trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFA59F95)),
+                          trailing: Icon(Icons.chevron_right_rounded, color: p.onSurfaceVariant),
                           onTap: () {
                             Navigator.of(context).push(
-                              MaterialPageRoute(
+                              DuskPageRoute.flowProgression(
                                 builder: (_) => const ProfileSetupScreen(isPreview: true),
                               ),
                             );
                           },
                         ),
-                        const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
-                        const ListTile(
-                          contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-                          leading: Icon(Icons.info_outline_rounded, color: Color(0xFF88827A)),
+                        Divider(height: 1, indent: 18, endIndent: 18, color: p.outline),
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+                          leading: Icon(Icons.info_outline_rounded, color: p.onSurfaceVariant),
                           title: Text(
                             'About Dusk',
-                            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.5,
+                              color: p.onSurface,
+                            ),
                           ),
                           trailing: Text(
                             'v1.0.0',
-                            style: TextStyle(color: Color(0xFF88827A), fontSize: 13),
+                            style: TextStyle(color: p.onSurfaceVariant, fontSize: 13),
                           ),
                         ),
-                        const Divider(height: 1, indent: 18, endIndent: 18, color: Color(0xFFF0EBE1)),
+                        Divider(height: 1, indent: 18, endIndent: 18, color: p.outline),
                         ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
                           leading: const Icon(Icons.logout_rounded, color: Colors.red),
                           title: const Text(
                             'Log Out',
-                            style: TextStyle(color: Colors.red, fontWeight: FontWeight.w700, fontSize: 14.5),
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14.5,
+                            ),
                           ),
                           onTap: () async {
                             final appStateRef = context.read<AppState>();
@@ -864,7 +860,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             await appStateRef.resetStateForSignOut();
                             if (context.mounted) {
                               Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(builder: (_) => const AuthScreen()),
+                                DuskPageRoute.flowProgression(
+                                  builder: (_) => const AuthScreen(),
+                                ),
                                 (route) => false,
                               );
                             }
@@ -885,7 +883,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-/// Simple data holder for each permission row in the Settings screen.
 class _PermissionItem {
   final Permission permission;
   final String label;
@@ -901,4 +898,3 @@ class _PermissionItem {
     required this.color,
   });
 }
-

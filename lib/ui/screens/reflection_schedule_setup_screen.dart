@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/notification_service.dart';
 import '../../services/supabase_service.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../navigation/dusk_navigation.dart';
 import 'home_screen.dart';
 
 class ReflectionScheduleSetupScreen extends StatefulWidget {
@@ -21,7 +22,7 @@ class _ReflectionScheduleSetupScreenState extends State<ReflectionScheduleSetupS
   final List<Map<String, dynamic>> _frequencies = [
     {
       'label': 'Daily',
-      'subtitle': 'Every evening reflection ritual',
+      'subtitle': 'Every evening reflection',
       'value': 1,
       'isRecommended': false,
     },
@@ -101,7 +102,7 @@ class _ReflectionScheduleSetupScreenState extends State<ReflectionScheduleSetupS
 
     if (mounted) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        DuskPageRoute.flowProgression(builder: (_) => const HomeScreen()),
       );
     }
   }
@@ -119,7 +120,7 @@ class _ReflectionScheduleSetupScreenState extends State<ReflectionScheduleSetupS
               children: [
                 const Center(
                   child: DuskPillBadge(
-                    text: 'STEP 2 OF 2 • REFLECTION RITUAL',
+                    text: 'STEP 2 OF 2 • REFLECTION',
                     variant: DuskBadgeVariant.peach,
                     icon: Icons.wb_twilight_rounded,
                   ),
@@ -144,7 +145,7 @@ class _ReflectionScheduleSetupScreenState extends State<ReflectionScheduleSetupS
                 const SizedBox(height: 18),
 
                 const Text(
-                  'Set your reflection ritual',
+                  'Set your reflection',
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,

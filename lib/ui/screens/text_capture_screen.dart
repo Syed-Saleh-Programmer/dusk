@@ -5,6 +5,9 @@ import '../../models/dump.dart';
 import '../../providers/app_state.dart';
 import '../../main.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../widgets/project_components.dart';
+import '../theme/app_theme.dart';
+import 'paywall_screen.dart';
 
 class TextCaptureScreen extends StatefulWidget {
   const TextCaptureScreen({super.key});
@@ -17,6 +20,14 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
   final CaptureService _captureService = CaptureService();
   final TextEditingController _textController = TextEditingController();
   bool _isSaving = false;
+  List<String> _selectedTags = [];
+  String? _selectedProjectId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedProjectId = context.read<AppState>().activeProjectId;
+  }
 
   @override
   void dispose() {
@@ -38,8 +49,10 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
+        showDuskSnackBar(
+          context,
+          content: Text('Failed to save: $e'),
+          duration: const Duration(milliseconds: 1800),
         );
       }
     }
@@ -62,30 +75,53 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
   Future<void> _handleSave() async {
     if (_isSaving) return;
 
-    final text = _textController.text.trim();
-    if (text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please write a thought')),
+    final appState = context.read<AppState>();
+    if (!appState.canCaptureDump) {
+      showDuskSnackBar(
+        context,
+        content: const Text("Daily limit of 20 dumps reached. Upgrade to Pro for unlimited captures."),
+        duration: const Duration(seconds: 3),
+      );
+      Navigator.of(context).push(
+        DuskPageRoute.modalSheet(builder: (_) => const PaywallScreen()),
       );
       return;
     }
-    await _saveAndPop(() => _captureService.captureText(text));
+
+    final text = _textController.text.trim();
+    if (text.isEmpty) {
+      showDuskSnackBar(
+        context,
+        content: const Text('Please write a thought'),
+        duration: const Duration(milliseconds: 1800),
+      );
+      return;
+    }
+    await _saveAndPop(
+      () => _captureService.captureText(
+        text,
+        tags: _selectedTags,
+        projectId: _selectedProjectId,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final p = AppTheme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: p.background,
       resizeToAvoidBottomInset: true,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: Column(
             children: [
-              // Top Header: Back Button, Title, Save Tick Button
+              // Top Header: Back Button, Title, Theme Switcher & Save Button
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     DuskCircleButton(
                       icon: Icons.arrow_back_ios_new_rounded,
@@ -93,17 +129,22 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
                       iconSize: 17,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    const Text(
-                      'New Thought',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B1A19),
-                        letterSpacing: -0.2,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'New Thought',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: p.onSurface,
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
+                    const DuskQuickThemeButton(size: 38, iconSize: 18),
+                    const SizedBox(width: 10),
                     _isSaving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 40,
                             height: 40,
                             child: Center(
@@ -113,14 +154,14 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2.2,
                                   valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFFFF7A1A),
+                                    p.primary,
                                   ),
                                 ),
                               ),
                             ),
                           )
                         : Material(
-                            color: const Color(0xFFFF7A1A),
+                            color: p.primary,
                             shape: const CircleBorder(),
                             child: InkWell(
                               onTap: _handleSave,
@@ -132,7 +173,7 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
                                   shape: BoxShape.circle,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFFFF7A1A).withValues(alpha: 0.28),
+                                      color: p.primary.withValues(alpha: 0.28),
                                       blurRadius: 10,
                                       offset: const Offset(0, 3),
                                     ),
@@ -152,10 +193,22 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
                 ),
               ),
 
+              // Project Space Selector Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DuskProjectSelectorChip(
+                    selectedProjectId: _selectedProjectId,
+                    onProjectChanged: (newId) => setState(() => _selectedProjectId = newId),
+                  ),
+                ),
+              ),
+
               // Fullscreen borderless, background-free TextField
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
                   child: TextField(
                     controller: _textController,
                     expands: true,
@@ -165,16 +218,16 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
                     textAlignVertical: TextAlignVertical.top,
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
-                      color: Color(0xFF1B1A19),
+                      color: p.onSurface,
                       height: 1.6,
                       fontWeight: FontWeight.w400,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       hintText: 'What is lingering on your mind tonight? Type your thoughts freely...',
                       hintStyle: TextStyle(
-                        color: Color(0xFFAFA99E),
+                        color: p.onSurfaceVariant,
                         fontSize: 18,
                         height: 1.6,
                       ),
@@ -188,6 +241,17 @@ class _TextCaptureScreenState extends State<TextCaptureScreen> {
                       filled: false,
                     ),
                   ),
+                ),
+              ),
+
+              // Tag Selector Bar at Bottom
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: DuskTagSelector(
+                  availableTags: appState.availableTags,
+                  selectedTags: _selectedTags,
+                  onChanged: (tags) => setState(() => _selectedTags = tags),
+                  onCreateCustomTag: appState.addCustomTag,
                 ),
               ),
             ],

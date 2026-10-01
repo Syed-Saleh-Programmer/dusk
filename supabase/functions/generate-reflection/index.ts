@@ -10,6 +10,19 @@ const ACTIVE_MODELS = [
   'llama-3.1-8b-instant',
 ]
 
+const DEFAULT_QUESTIONS = [
+  "Looking back across the past 7 days, what single moment or achievement brought you the most genuine fulfillment?",
+  "Which of your pending goals or tasks feels most important right now, and what is holding you back from completing it?",
+  "Connecting your recent notes and thoughts, what recurring pattern or emotion have you noticed showing up most often?",
+  "What was a hidden win or subtle progress you made recently that you haven't given yourself enough credit for?",
+  "If you look at the challenges you navigated over the past week, what key lesson stands out?",
+  "How well have your daily actions aligned with your core priorities and personal values this week?",
+  "What project, task, or thought has been taking up unnecessary space in your mind, and how can you let it go?",
+  "Who or what inspired you most recently, and how did it influence your mindset?",
+  "What is one small boundary or habit change that would give you more energy and clarity starting tomorrow?",
+  "Looking ahead, what is your single primary intention or focus for the upcoming days?"
+]
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
@@ -52,79 +65,120 @@ serve(async (req) => {
       console.warn('Error checking existing session:', checkErr)
     }
 
-    // 3. Fetch dumps for this cycle (or fallback to recent user dumps)
+    // 3. Fetch past 7 days notes/dumps, todo/pending tasks, and past week reflection archive
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     let dumps: any[] = []
+    let pendingTasks: any[] = []
+    let pastInsights: any[] = []
+
     try {
-      const { data: cycleData } = await supabaseClient
-        .from('reflection_cycles')
-        .select('period_start, period_end')
-        .eq('id', cycle_id)
-        .maybeSingle()
-
-      if (cycleData) {
-        const { data: cycleDumps } = await supabaseClient
+      const [dumpsRes, tasksRes, insightsRes] = await Promise.all([
+        supabaseClient
           .from('dumps')
-          .select('*')
+          .select('captured_at, created_at, type, title, content, transcript, ai_summary, category, tags')
           .eq('user_id', user_id)
-          .gte('captured_at', cycleData.period_start)
-          .lte('captured_at', cycleData.period_end)
-
-        if (cycleDumps && cycleDumps.length > 0) {
-          dumps = cycleDumps
-        }
-      }
-
-      if (dumps.length === 0) {
-        // Fallback: fetch recent dumps from the last 48h
-        const { data: recentDumps } = await supabaseClient
-          .from('dumps')
-          .select('*')
-          .eq('user_id', user_id)
+          .gte('captured_at', sevenDaysAgo)
           .order('captured_at', { ascending: false })
-          .limit(10)
+          .limit(30),
 
-        if (recentDumps && recentDumps.length > 0) {
-          dumps = recentDumps
-        }
-      }
+        supabaseClient
+          .from('tasks')
+          .select('title, tags, due_date, source_label, created_at')
+          .eq('user_id', user_id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .limit(25),
+
+        supabaseClient
+          .from('insight_cards')
+          .select('title, main_insight, standout, suggestion, created_at')
+          .eq('user_id', user_id)
+          .gte('created_at', sevenDaysAgo)
+          .order('created_at', { ascending: false })
+          .limit(10)
+      ])
+
+      dumps = dumpsRes.data || []
+      pendingTasks = tasksRes.data || []
+      pastInsights = insightsRes.data || []
     } catch (fetchErr) {
-      console.warn('Error fetching dumps for reflection:', fetchErr)
+      console.warn('Error fetching 7-day reflection context data:', fetchErr)
     }
 
     let summary = ''
     let questions: string[] = []
 
-    if (dumps.length === 0) {
-      // Gentle default questions if the user has no captures today
-      summary = "Take a quiet, mindful pause to reflect on your day and set clear intentions for tomorrow."
-      questions = [
-        "What was the most meaningful or memorable moment of your day?",
-        "What is something you learned, navigated, or want to let go of today?",
-        "What is your primary intention, priority, or mindset focus for tomorrow?"
-      ]
+    if (dumps.length === 0 && pendingTasks.length === 0 && pastInsights.length === 0) {
+      summary = "Take a quiet, mindful pause to reflect on your past week, evaluate your progress, and set clear intentions."
+      questions = [...DEFAULT_QUESTIONS]
     } else {
-      // 4. Prepare Context for Groq
-      const contextText = dumps
-        .map((d: any) => `[${d.captured_at || d.created_at}] ${d.type}: ${d.title ? `Title: ${d.title}. ` : ''}${d.content || ''} ${d.transcript || ''} ${d.ai_summary ? `Summary: ${d.ai_summary}` : ''}`)
+      // 4. Format concise context for Groq prompt to control token size
+      const formatText = (text?: string, maxLen = 200) => {
+        if (!text) return ''
+        const cleaned = text.replace(/\s+/g, ' ').trim()
+        return cleaned.length > maxLen ? cleaned.substring(0, maxLen) + '...' : cleaned
+      }
+
+      const notesContext = dumps
+        .map((d: any) => {
+          const body = formatText(d.content || d.transcript || d.ai_summary)
+          const date = (d.captured_at || d.created_at || '').substring(0, 10)
+          return `- [${date}] (${d.type}${d.category ? `, ${d.category}` : ''}): ${d.title ? `${d.title} - ` : ''}${body}`
+        })
         .join('\n')
 
-      const prompt = `You are a thoughtful, empathetic personal reflection companion for the Dusk app.
-Analyze the user's journal entries (including quick thoughts, voice memos, and captured moments) from this reflection period:
+      const tasksContext = pendingTasks
+        .map((t: any) => {
+          const tags = Array.isArray(t.tags) && t.tags.length > 0 ? ` [Tags: ${t.tags.join(', ')}]` : ''
+          const source = t.source_label ? ` (Source: ${t.source_label})` : ''
+          return `- [Pending Task] ${t.title}${tags}${source}`
+        })
+        .join('\n')
 
-Journal Entries:
-${contextText}
+      const archiveContext = pastInsights
+        .map((i: any) => {
+          const date = (i.created_at || '').substring(0, 10)
+          return `- [${date} Insight] "${i.title}": ${formatText(i.main_insight)} | Breakthrough: ${formatText(i.standout)}`
+        })
+        .join('\n')
+
+      const prompt = `You are an observant, empathetic personal reflection guide for the Dusk app.
+Analyze the user's data from the past 7 days:
+
+=== PAST 7 DAYS NOTES & MOMENTS ===
+${notesContext || "No notes captured in the past 7 days."}
+
+=== TODO / PENDING TASKS ===
+${tasksContext || "No pending tasks."}
+
+=== PAST WEEK REFLECTION ARCHIVE ===
+${archiveContext || "No previous reflection insights from the past week."}
 
 Generate:
-1. "summary": A warm, high-signal 2-3 sentence overview synthesizing the overarching themes, emotional tone, key accomplishments, or challenges from these entries. Speak directly to the user.
-2. "questions": Exactly 3 personalized, introspective reflection questions directly grounded in the specific topics and feelings they wrote or spoke about, guiding them toward clarity and growth.
+1. "summary": A warm, high-signal 2-3 sentence overview synthesizing what the user's past 7 days have been about (themes, progress, mindset, friction). Speak directly to the user.
+2. "questions": EXACTLY 10 personalized, thought-provoking reflection questions.
 
-Return strictly valid JSON in this format:
+Rules for the 10 Reflection Questions:
+- Connect the dots between their notes, ideas, pending tasks, and past week reflection archive.
+- Ask directly on progress regarding pending tasks or ongoing projects.
+- Explore underlying mindset, emotions, hidden wins, and areas of growth.
+- Make questions open-ended, deeply reflective, and forward-moving.
+- Keep each question concise (1 clear sentence, under 25 words).
+
+Return strictly valid JSON format:
 {
-  "summary": "Your synthesizing 2-3 sentence reflection here...",
+  "summary": "Your synthesizing 2-3 sentence weekly overview here...",
   "questions": [
-    "Question 1 connecting to a specific theme or emotion from their notes?",
-    "Question 2 exploring a decision, obstacle, or realization?",
-    "Question 3 for future focus or self-compassion?"
+    "Question 1 connecting dots across notes and mood?",
+    "Question 2 asking on progress of specific pending tasks?",
+    "Question 3 exploring a breakthrough or lesson?",
+    "Question 4 on recurring thoughts or patterns?",
+    "Question 5 on mindset or personal energy?",
+    "Question 6 on a hidden win or subtle accomplishment?",
+    "Question 7 on friction or obstacle navigated?",
+    "Question 8 connecting past week insights to current status?",
+    "Question 9 on boundaries, rest, or focus?",
+    "Question 10 on primary intention and next step?"
   ]
 }
 `
@@ -145,13 +199,13 @@ Return strictly valid JSON in this format:
               model,
               messages: [{ role: 'user', content: prompt }],
               response_format: { type: 'json_object' },
-              temperature: 0.6,
+              temperature: 0.65,
             }),
           })
 
           if (response.ok) {
             result = await response.json()
-            console.log(`Successfully generated reflection using model: ${model}`)
+            console.log(`Successfully generated 10 reflection questions using model: ${model}`)
             break
           } else {
             const errBody = await response.text()
@@ -169,19 +223,27 @@ Return strictly valid JSON in this format:
         try {
           const parsed = JSON.parse(rawMessage)
           summary = parsed.summary || ''
-          questions = Array.isArray(parsed.questions) ? parsed.questions : []
+          questions = Array.isArray(parsed.questions) ? parsed.questions.map((q: any) => String(q).trim()).filter(Boolean) : []
         } catch {
-          console.warn('Failed to parse Groq response, using fallback extraction')
+          console.warn('Failed to parse Groq response, using fallback')
         }
       }
 
-      if (!summary || questions.length === 0) {
-        summary = "Reflecting across your thoughts and captures from today."
-        questions = [
-          "Looking at the tasks and thoughts from today, what brought you the most satisfaction?",
-          "What friction or challenge did you encounter, and what did it teach you?",
-          "How can you set yourself up for clarity and ease tomorrow?"
-        ]
+      // Backfill to ensure exactly 10 questions
+      if (questions.length < 10) {
+        for (const defaultQ of DEFAULT_QUESTIONS) {
+          if (questions.length >= 10) break
+          if (!questions.includes(defaultQ)) {
+            questions.push(defaultQ)
+          }
+        }
+      }
+      if (questions.length > 10) {
+        questions = questions.slice(0, 10)
+      }
+
+      if (!summary) {
+        summary = "Reflecting across your past 7 days of thoughts, pending tasks, and recent insights."
       }
     }
 

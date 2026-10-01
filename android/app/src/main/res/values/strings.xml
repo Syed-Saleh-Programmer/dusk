@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Dusk</string>
+    <string name="widget_quick_capture_label">Dusk Quick Capture</string>
+    <string name="widget_quick_capture_desc">Capture a Thought, Voice memo, or Photo moment in one tap.</string>
+    <string name="widget_voice_text_label">Dusk Voice &amp; Thought</string>
+    <string name="widget_voice_text_desc">Separated floating cards for instant Text and Voice capture.</string>
+    <string name="widget_analytics_label">Dusk Analytics &amp; Rhythm</string>
+    <string name="widget_analytics_desc">7-day activity graph, capture breakdown charts, and evening ritual readiness.</string>
+</resources>

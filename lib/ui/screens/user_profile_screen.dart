@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_state.dart';
 import '../../services/supabase_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -111,9 +112,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFFF9F7F2),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          decoration: BoxDecoration(
+            color: AppTheme.backgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           padding: EdgeInsets.fromLTRB(
             22,
@@ -174,8 +175,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               const SizedBox(height: 18),
               _buildSheetOption(
                 icon: Icons.camera_alt_rounded,
-                iconBg: const Color(0xFFFDE8D7),
-                iconColor: const Color(0xFFFF7A1A),
+                iconBg: AppTheme.primaryContainer,
+                iconColor: AppTheme.primaryColor,
                 title: 'Take a Photo',
                 subtitle: 'Use your camera to snap a new profile picture',
                 onTap: () {
@@ -186,8 +187,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               const SizedBox(height: 10),
               _buildSheetOption(
                 icon: Icons.photo_library_rounded,
-                iconBg: const Color(0xFFE8F1FC),
-                iconColor: const Color(0xFF4A84D8),
+                iconBg: AppTheme.secondaryContainer,
+                iconColor: AppTheme.secondaryColor,
                 title: 'Choose from Gallery',
                 subtitle: 'Pick a photo from your library',
                 onTap: () {
@@ -299,11 +300,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFFFF7A1A),
+            colorScheme: ColorScheme.light(
+              primary: AppTheme.primaryColor,
               onPrimary: Colors.white,
               surface: Colors.white,
-              onSurface: Color(0xFF1B1A19),
+              onSurface: const Color(0xFF1B1A19),
             ),
           ),
           child: child!,
@@ -417,8 +418,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: imageProvider == null
-                        ? const LinearGradient(
-                            colors: [Color(0xFFFF9B50), Color(0xFFFF7A1A)],
+                        ? LinearGradient(
+                            colors: [AppTheme.primaryLight, AppTheme.primaryColor],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -430,7 +431,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFFF7A1A).withValues(alpha: 0.18),
+                        color: AppTheme.primaryColor.withValues(alpha: 0.18),
                         blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
@@ -497,10 +498,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.photo_camera_back_rounded,
                     size: 15,
-                    color: Color(0xFFFF7A1A),
+                    color: AppTheme.primaryColor,
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -529,7 +530,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final age = _calculateAge(_selectedDob);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: AppTheme.backgroundColor,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: Column(
@@ -538,24 +539,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     DuskCircleButton(
                       icon: Icons.arrow_back_ios_new_rounded,
-                      size: 42,
-                      iconSize: 18,
+                      size: 38,
+                      iconSize: 17,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    const Text(
-                      'Personal Profile',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B1A19),
-                        letterSpacing: -0.2,
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        'Personal Profile',
+                        style: TextStyle(
+                          fontSize: 17.5,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF1B1A19),
+                          letterSpacing: -0.2,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 42),
                   ],
                 ),
               ),
@@ -597,15 +599,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
                                 Icon(
                                   Icons.wb_twilight_rounded,
                                   size: 18,
-                                  color: Color(0xFFFF7A1A),
+                                  color: AppTheme.primaryColor,
                                 ),
-                                SizedBox(width: 8),
-                                Expanded(
+                                const SizedBox(width: 8),
+                                const Expanded(
                                   child: Text(
                                     'What should I call you?',
                                     maxLines: 1,
@@ -617,8 +619,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: 8),
-                                DuskPillBadge(
+                                const SizedBox(width: 8),
+                                const DuskPillBadge(
                                   text: 'Required',
                                   variant: DuskBadgeVariant.peach,
                                 ),
@@ -651,10 +653,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                               decoration: InputDecoration(
                                 hintText: 'e.g. Alex, Maya, Sam...',
-                                fillColor: const Color(0xFFFAF7F2),
-                                prefixIcon: const Icon(
+                                fillColor: AppTheme.backgroundColor,
+                                prefixIcon: Icon(
                                   Icons.person_outline_rounded,
-                                  color: Color(0xFFFF7A1A),
+                                  color: AppTheme.primaryColor,
                                   size: 20,
                                 ),
                                 errorText: _nameError,
@@ -684,15 +686,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Row(
+                            Row(
                               children: [
                                 Icon(
                                   Icons.work_outline_rounded,
                                   size: 18,
-                                  color: Color(0xFF4A84D8),
+                                  color: AppTheme.secondaryColor,
                                 ),
-                                SizedBox(width: 8),
-                                Expanded(
+                                const SizedBox(width: 8),
+                                const Expanded(
                                   child: Text(
                                     'Profession / Craft',
                                     maxLines: 1,
@@ -704,8 +706,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     ),
                                   ),
                                 ),
-                                SizedBox(width: 8),
-                                DuskPillBadge(
+                                const SizedBox(width: 8),
+                                const DuskPillBadge(
                                   text: 'Optional',
                                   variant: DuskBadgeVariant.neutral,
                                 ),
@@ -731,10 +733,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                               ),
                               decoration: InputDecoration(
                                 hintText: 'What do you do?',
-                                fillColor: const Color(0xFFFAF7F2),
-                                prefixIcon: const Icon(
+                                fillColor: AppTheme.backgroundColor,
+                                prefixIcon: Icon(
                                   Icons.badge_outlined,
-                                  color: Color(0xFF4A84D8),
+                                  color: AppTheme.secondaryColor,
                                   size: 20,
                                 ),
                                 suffixIcon: _professionController.text.isNotEmpty
@@ -775,12 +777,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     ),
                                     decoration: BoxDecoration(
                                       color: isSelected
-                                          ? const Color(0xFFE8F1FC)
+                                          ? AppTheme.secondaryContainer
                                           : const Color(0xFFF7F4EE),
                                       borderRadius: BorderRadius.circular(18),
                                       border: Border.all(
                                         color: isSelected
-                                            ? const Color(0xFF4A84D8)
+                                            ? AppTheme.secondaryColor
                                             : const Color(0xFFEAE3D8),
                                       ),
                                     ),
@@ -792,7 +794,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                             ? FontWeight.w700
                                             : FontWeight.w500,
                                         color: isSelected
-                                            ? const Color(0xFF205295)
+                                            ? AppTheme.onSecondaryContainer
                                             : const Color(0xFF6E6862),
                                       ),
                                     ),
@@ -826,10 +828,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           children: [
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.cake_outlined,
                                   size: 18,
-                                  color: Color(0xFF2DC48D),
+                                  color: AppTheme.tertiaryColor,
                                 ),
                                 const SizedBox(width: 8),
                                 const Expanded(
@@ -868,7 +870,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                   vertical: 14,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFFAF7F2),
+                                  color: AppTheme.backgroundColor,
                                   borderRadius: BorderRadius.circular(16),
                                   border: Border.all(
                                     color: const Color(0xFFECE7DE),
@@ -876,10 +878,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(
+                                    Icon(
                                       Icons.calendar_today_rounded,
                                       size: 19,
-                                      color: Color(0xFF2DC48D),
+                                      color: AppTheme.tertiaryColor,
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(

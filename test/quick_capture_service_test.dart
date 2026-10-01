@@ -18,5 +18,24 @@ void main() {
       await service.init();
       expect(service, isNotNull);
     });
+
+    test('Updates widget analytics data cleanly without throwing', () async {
+      final service = QuickCaptureService();
+      await service.updateWidgetData(
+        dumpCount: 3,
+        todayCount: 3,
+        totalCount: 14,
+        thoughtCount: 7,
+        voiceCount: 4,
+        photoCount: 3,
+        weeklyCounts: const [1, 2, 0, 3, 2, 3, 3],
+        weeklyLabels: const ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
+        activeDays: 6,
+        ritualProgress: 75,
+        ritualCompleted: false,
+        peakPeriod: 'Evening',
+      );
+      expect(service, isNotNull);
+    });
   });
 }

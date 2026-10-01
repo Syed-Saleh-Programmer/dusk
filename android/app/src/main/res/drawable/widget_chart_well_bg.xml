@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- Frosted Translucent Inner Glass Well for Charts -->
+    <gradient
+        android:angle="270"
+        android:startColor="#80FFFFFF"
+        android:endColor="#4DFFFFFF"
+        android:type="linear" />
+    <corners android:radius="18dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#B3FFFFFF" />
+</shape>

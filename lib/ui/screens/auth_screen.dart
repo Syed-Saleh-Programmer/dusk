@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -8,6 +9,7 @@ import '../../providers/app_state.dart';
 import '../../services/supabase_service.dart';
 import '../widgets/dusk_logo.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../navigation/dusk_navigation.dart';
 import 'home_screen.dart';
 import 'profile_setup_screen.dart';
 
@@ -19,16 +21,45 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
+  static const String googleWebClientId = String.fromEnvironment(
+    'GOOGLE_WEB_CLIENT_ID',
+    defaultValue:
+        '800823333611-qt1o5i485e5nsm23bpl5p9jq3taesa9f.apps.googleusercontent.com',
+  );
+  static const String googleIosClientId = String.fromEnvironment('GOOGLE_IOS_CLIENT_ID');
+
   final SupabaseService _supabaseService = SupabaseService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
+  StreamSubscription<AuthState>? _authSubscription;
   bool _isLoading = false;
   bool _isLogin = true;
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    // Listen for OAuth deep link callbacks (e.g. Google OAuth redirecting back to dusk://login-callback)
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
+      final session = data.session;
+      if (session != null && mounted) {
+        await context.read<AppState>().onAuthSessionChanged();
+        final needsSetup = await _needsProfileSetup();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          DuskPageRoute.flowProgression(
+            builder: (_) =>
+                needsSetup ? const ProfileSetupScreen() : const HomeScreen(),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _authSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -71,34 +102,59 @@ class _AuthScreenState extends State<AuthScreen> {
   Future<void> _submitGoogleSignIn() async {
     setState(() => _isLoading = true);
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-      final googleUser = await googleSignIn.signIn();
-      final googleAuth = await googleUser?.authentication;
-
-      if (googleAuth?.idToken != null) {
-        if (_supabaseService.currentUser != null) {
-          await _supabaseService.signOut();
+      // 1. If Web Client ID is supplied via --dart-define, attempt native Play Services sign in
+      if (googleWebClientId.isNotEmpty) {
+        final GoogleSignIn googleSignIn = GoogleSignIn(
+          serverClientId: googleWebClientId,
+          clientId: googleIosClientId.isNotEmpty ? googleIosClientId : null,
+        );
+        final googleUser = await googleSignIn.signIn();
+        if (googleUser == null) {
+          // User canceled the account picker
+          return;
         }
-        await Supabase.instance.client.auth.signInWithIdToken(
-          provider: OAuthProvider.google,
-          idToken: googleAuth!.idToken!,
-          accessToken: googleAuth.accessToken,
-        );
-        if (!mounted) return;
-        await context.read<AppState>().onAuthSessionChanged();
-        final needsSetup = await _needsProfileSetup();
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) =>
-                needsSetup ? const ProfileSetupScreen() : const HomeScreen(),
-          ),
-        );
+
+        final googleAuth = await googleUser.authentication;
+        if (googleAuth.idToken != null) {
+          if (_supabaseService.currentUser != null) {
+            await _supabaseService.signOut();
+          }
+          await Supabase.instance.client.auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: googleAuth.idToken!,
+            accessToken: googleAuth.accessToken,
+          );
+          if (!mounted) return;
+          await context.read<AppState>().onAuthSessionChanged();
+          final needsSetup = await _needsProfileSetup();
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            DuskPageRoute.flowProgression(
+              builder: (_) =>
+                  needsSetup ? const ProfileSetupScreen() : const HomeScreen(),
+            ),
+          );
+          return;
+        }
       }
+
+      // 2. Browser/Custom Tab OAuth flow (uses the Google Client ID & Secret configured in Supabase Dashboard)
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'dusk://login-callback',
+      );
     } catch (e) {
       if (mounted) {
+        final errText = _formatAuthError(e);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Google Sign-In failed: ${_formatAuthError(e)}')),
+          SnackBar(
+            content: Text(
+              errText.contains('developer') || errText.contains('10')
+                  ? 'Google credentials unconfigured. Please configure your Google Client ID or use Email sign in.'
+                  : 'Google Sign-In: $errText',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } finally {
@@ -150,7 +206,7 @@ class _AuthScreenState extends State<AuthScreen> {
         final needsSetup = await _needsProfileSetup();
         if (!mounted) return;
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
+          DuskPageRoute.flowProgression(
             builder: (_) =>
                 needsSetup ? const ProfileSetupScreen() : const HomeScreen(),
           ),
@@ -158,7 +214,7 @@ class _AuthScreenState extends State<AuthScreen> {
       } else {
         // First signup -> go to ProfileSetupScreen ("What should I call you?")
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const ProfileSetupScreen()),
+          DuskPageRoute.flowProgression(builder: (_) => const ProfileSetupScreen()),
         );
       }
     } catch (e) {
@@ -206,7 +262,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 const SizedBox(height: 8),
                 Text(
                   _isLogin
-                      ? 'Sign in to continue your evening reflection ritual.'
+                      ? 'Sign in to continue your reflection.'
                       : 'A quiet, private space for your daily thoughts and insights.',
                   style: const TextStyle(
                     fontSize: 14.5,
@@ -432,6 +488,38 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                 ).animate().fadeIn(delay: 540.ms),
+
+                const SizedBox(height: 12),
+                const Divider(color: Color(0xFFE8E2D8)),
+                const SizedBox(height: 12),
+
+                // Continue without Account (Free Users)
+                TextButton.icon(
+                  onPressed: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setBool('hasSeenOnboarding', true);
+                    await prefs.setBool('hasChosenGuestMode', true);
+                    if (!context.mounted) return;
+                    Navigator.of(context).pushReplacement(
+                      DuskPageRoute.flowProgression(
+                        builder: (_) => const HomeScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.bolt_rounded,
+                    color: Color(0xFFFF7A1A),
+                    size: 18,
+                  ),
+                  label: const Text(
+                    'Continue without an Account (Free Users)',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF1B1A19),
+                    ),
+                  ),
+                ).animate().fadeIn(delay: 580.ms),
               ],
             ),
           ),

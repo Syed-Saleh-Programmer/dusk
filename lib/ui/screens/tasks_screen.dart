@@ -7,7 +7,9 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/task_item.dart';
 import '../../providers/app_state.dart';
 import '../../services/task_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../widgets/project_components.dart';
 import 'dump_detail_screen.dart';
 
 enum TaskDueFilter {
@@ -34,9 +36,81 @@ class _TasksScreenState extends State<TasksScreen> {
   int _statusTabIndex = 0; // 0: To Do, 1: Done, 2: Archived
   String _sourceFilter = 'all'; // 'all', 'dump', 'insight', 'manual'
   TaskDueFilter _dueFilter = TaskDueFilter.all;
+  String? _selectedTagFilter;
   bool _isSearchOpen = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+
+  bool _isMultiSelect = false;
+  final Set<String> _selectedTaskIds = <String>{};
+
+  void _exitMultiSelect() {
+    setState(() {
+      _isMultiSelect = false;
+      _selectedTaskIds.clear();
+    });
+  }
+
+  Future<void> _confirmDeleteSelectedTasks() async {
+    if (_selectedTaskIds.isEmpty) return;
+    final count = _selectedTaskIds.length;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text(
+          count == 1 ? 'Delete Task' : 'Delete $count Tasks',
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 18,
+            color: Color(0xFF1B1A19),
+          ),
+        ),
+        content: Text(
+          count == 1
+              ? 'Are you sure you want to delete this task? Once deleted, it will not be recreated.'
+              : 'Are you sure you want to delete these $count tasks? Once deleted, they will not be recreated.',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF6E6862)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: Color(0xFF88827A),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFE84F6E),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final idsToDelete = _selectedTaskIds.toList();
+      _exitMultiSelect();
+      await context.read<AppState>().deleteTasks(idsToDelete);
+      if (mounted) {
+        showDuskSnackBar(
+          context,
+          content: Text(count == 1 ? 'Task deleted' : '$count tasks deleted'),
+          duration: const Duration(milliseconds: 2000),
+        );
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -54,12 +128,15 @@ class _TasksScreenState extends State<TasksScreen> {
   }
 
   bool get _hasActiveFilters =>
-      _sourceFilter != 'all' || _dueFilter != TaskDueFilter.all;
+      _sourceFilter != 'all' ||
+      _dueFilter != TaskDueFilter.all ||
+      _selectedTagFilter != null;
 
   int get _activeFilterCount {
     int count = 0;
     if (_sourceFilter != 'all') count++;
     if (_dueFilter != TaskDueFilter.all) count++;
+    if (_selectedTagFilter != null) count++;
     return count;
   }
 
@@ -114,8 +191,12 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  List<TaskItem> _filterTasks(List<TaskItem> allTasks) {
+  List<TaskItem> _filterTasks(List<TaskItem> allTasks, String? activeProjectId) {
     return allTasks.where((t) {
+      if (activeProjectId != null && t.projectId != activeProjectId) {
+        return false;
+      }
+
       if (_sourceFilter != 'all' && t.sourceType.name != _sourceFilter) {
         return false;
       }
@@ -124,11 +205,21 @@ class _TasksScreenState extends State<TasksScreen> {
         return false;
       }
 
+      if (_selectedTagFilter != null) {
+        final target = _selectedTagFilter!.toLowerCase();
+        final hasTag = t.tags.any((tag) => tag.toLowerCase() == target);
+        if (!hasTag) return false;
+      }
+
       if (_searchQuery.trim().isNotEmpty) {
         final q = _searchQuery.toLowerCase().trim();
         final matchTitle = t.title.toLowerCase().contains(q);
         final matchSource = (t.sourceLabel ?? '').toLowerCase().contains(q);
-        if (!matchTitle && !matchSource) return false;
+        final matchTag = t.tags.any(
+          (tag) =>
+              tag.toLowerCase().contains(q) || '#${tag.toLowerCase()}'.contains(q),
+        );
+        if (!matchTitle && !matchSource && !matchTag) return false;
       }
 
       return true;
@@ -161,6 +252,8 @@ class _TasksScreenState extends State<TasksScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final appState = context.watch<AppState>();
+            final availableTags = appState.availableTags;
             final maxSheetHeight = MediaQuery.of(ctx).size.height * 0.85;
             return ConstrainedBox(
               constraints: BoxConstraints(maxHeight: maxSheetHeight),
@@ -207,17 +300,18 @@ class _TasksScreenState extends State<TasksScreen> {
                                 setState(() {
                                   _sourceFilter = 'all';
                                   _dueFilter = TaskDueFilter.all;
+                                  _selectedTagFilter = null;
                                 });
                                 Navigator.pop(ctx);
                               },
-                              child: const Padding(
-                                padding: EdgeInsets.only(left: 12),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 12),
                                 child: Text(
                                   'Reset',
                                   style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFFFF7A1A),
+                                    color: AppTheme.primaryColor,
                                   ),
                                 ),
                               ),
@@ -292,6 +386,55 @@ class _TasksScreenState extends State<TasksScreen> {
                                     ),
                                 ],
                               ),
+                              const SizedBox(height: 18),
+                              const Text(
+                                'TAG',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.9,
+                                  color: Color(0xFF88827A),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildFilterOptionChip(
+                                    label: 'All Tags',
+                                    isSelected: _selectedTagFilter == null,
+                                    onTap: () {
+                                      setModalState(
+                                        () => _selectedTagFilter = null,
+                                      );
+                                      setState(
+                                        () => _selectedTagFilter = null,
+                                      );
+                                    },
+                                  ),
+                                  for (final tag in availableTags)
+                                    _buildFilterOptionChip(
+                                      label: '#$tag',
+                                      isSelected: _selectedTagFilter
+                                              ?.toLowerCase() ==
+                                          tag.toLowerCase(),
+                                      onTap: () {
+                                        final next = _selectedTagFilter
+                                                    ?.toLowerCase() ==
+                                                tag.toLowerCase()
+                                            ? null
+                                            : tag;
+                                        setModalState(
+                                          () => _selectedTagFilter = next,
+                                        );
+                                        setState(
+                                          () => _selectedTagFilter = next,
+                                        );
+                                      },
+                                    ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -327,12 +470,12 @@ class _TasksScreenState extends State<TasksScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF1B1A19)
+              ? AppTheme.primaryColor
               : const Color(0xFFF6F3EC),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isSelected
-                ? const Color(0xFF1B1A19)
+                ? AppTheme.primaryColor
                 : const Color(0xFFE8E2D8),
           ),
         ),
@@ -363,7 +506,7 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
-    final filtered = _filterTasks(appState.tasks);
+    final filtered = _filterTasks(appState.tasks, appState.activeProjectId);
 
     final activeTasks = _sortActiveTasks(
       filtered.where((t) => t.status == TaskStatus.pending).toList(),
@@ -379,135 +522,251 @@ class _TasksScreenState extends State<TasksScreen> {
             ? doneTasks
             : archivedTasks;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
-      body: DuskAmbientBackground(
-        child: SafeArea(
-          bottom: false,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. Minimal Header Bar
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
-                child: Row(
-                  children: [
-                    if (widget.showBackButton) ...[
-                      DuskCircleButton(
-                        icon: Icons.arrow_back_rounded,
-                        size: 40,
-                        iconSize: 19,
-                        onTap: () => Navigator.of(context).pop(),
-                      ),
-                      const SizedBox(width: 12),
-                    ],
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text(
-                            'Tasks',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 21,
-                              fontWeight: FontWeight.w800,
-                              color: Color(0xFF1B1A19),
-                              letterSpacing: -0.4,
-                              height: 1.1,
-                            ),
+    return PopScope(
+      canPop: !_isMultiSelect,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _isMultiSelect) {
+          _exitMultiSelect();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppTheme.backgroundColor,
+        body: DuskAmbientBackground(
+          child: SafeArea(
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Header Bar (Switches to Multi-Select Bar when active)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+                  child: _isMultiSelect
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 8,
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _buildSubtitle(activeTasks),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF88827A),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    DuskCircleButton(
-                      icon: _isSearchOpen
-                          ? Icons.close_rounded
-                          : Icons.search_rounded,
-                      size: 40,
-                      iconSize: 19,
-                      iconColor: _isSearchOpen || _searchQuery.isNotEmpty
-                          ? const Color(0xFFFF7A1A)
-                          : const Color(0xFF1B1A19),
-                      tooltip: 'Search tasks',
-                      onTap: () {
-                        setState(() {
-                          _isSearchOpen = !_isSearchOpen;
-                          if (!_isSearchOpen) {
-                            _searchQuery = '';
-                            _searchController.clear();
-                          }
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        DuskCircleButton(
-                          icon: Icons.tune_rounded,
-                          size: 40,
-                          iconSize: 19,
-                          iconColor: _hasActiveFilters
-                              ? const Color(0xFFFF7A1A)
-                              : const Color(0xFF1B1A19),
-                          tooltip: 'Filter tasks',
-                          onTap: _openFilterSheet,
-                        ),
-                        if (_activeFilterCount > 0)
-                          Positioned(
-                            top: -2,
-                            right: -2,
-                            child: Container(
-                              width: 16,
-                              height: 16,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFFF7A1A),
-                                shape: BoxShape.circle,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1B1A19),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.12),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
                               ),
-                              child: Center(
-                                child: Text(
-                                  '$_activeFilterCount',
-                                  style: const TextStyle(
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              GestureDetector(
+                                onTap: _exitMultiSelect,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    size: 16,
                                     color: Colors.white,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w800,
                                   ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(width: 12),
+                              Text(
+                                '${_selectedTaskIds.length} Selected',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    final visibleIds =
+                                        displayedTasks.map((t) => t.id).toSet();
+                                    if (_selectedTaskIds.containsAll(visibleIds)) {
+                                      _selectedTaskIds.clear();
+                                      _isMultiSelect = false;
+                                    } else {
+                                      _selectedTaskIds.addAll(visibleIds);
+                                    }
+                                  });
+                                },
+                                child: Text(
+                                  displayedTasks.isNotEmpty &&
+                                          _selectedTaskIds.containsAll(
+                                            displayedTasks.map((t) => t.id),
+                                          )
+                                      ? 'Deselect All'
+                                      : 'Select All',
+                                  style: const TextStyle(
+                                    color: Color(0xFFFF9646),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              GestureDetector(
+                                onTap: _selectedTaskIds.isEmpty
+                                    ? null
+                                    : _confirmDeleteSelectedTasks,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE84F6E),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 15,
+                                        color: Colors.white,
+                                      ),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 12.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
-                    DuskCircleButton(
-                      icon: Icons.ios_share_rounded,
-                      size: 40,
-                      iconSize: 18,
-                      tooltip: 'Export tasks',
-                      onTap: () => showTaskExportModal(
-                        context,
-                        tasks: displayedTasks.isNotEmpty
-                            ? displayedTasks
-                            : filtered,
-                        periodLabel: _getDueFilterLabel(_dueFilter),
-                      ),
-                    ),
-                  ],
+                        )
+                      : Row(
+                          children: [
+                            if (widget.showBackButton) ...[
+                              DuskCircleButton(
+                                icon: Icons.arrow_back_rounded,
+                                size: 40,
+                                iconSize: 19,
+                                onTap: () => Navigator.of(context).pop(),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text(
+                                    'Tasks',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 21,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF1B1A19),
+                                      letterSpacing: -0.4,
+                                      height: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _buildSubtitle(activeTasks),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF88827A),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            DuskCircleButton(
+                              icon: _isSearchOpen
+                                  ? Icons.close_rounded
+                                  : Icons.search_rounded,
+                              size: 40,
+                              iconSize: 19,
+                              iconColor: _isSearchOpen || _searchQuery.isNotEmpty
+                                  ? AppTheme.primaryColor
+                                  : const Color(0xFF1B1A19),
+                              tooltip: 'Search tasks',
+                              onTap: () {
+                                setState(() {
+                                  _isSearchOpen = !_isSearchOpen;
+                                  if (!_isSearchOpen) {
+                                    _searchQuery = '';
+                                    _searchController.clear();
+                                  }
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                DuskCircleButton(
+                                  icon: Icons.tune_rounded,
+                                  size: 40,
+                                  iconSize: 19,
+                                  iconColor: _hasActiveFilters
+                                      ? AppTheme.primaryColor
+                                      : const Color(0xFF1B1A19),
+                                  tooltip: 'Filter tasks',
+                                  onTap: _openFilterSheet,
+                                ),
+                                if (_activeFilterCount > 0)
+                                  Positioned(
+                                    top: -2,
+                                    right: -2,
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.primaryColor,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Center(
+                                        child: Text(
+                                          '$_activeFilterCount',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9.5,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            DuskCircleButton(
+                              icon: Icons.ios_share_rounded,
+                              size: 40,
+                              iconSize: 18,
+                              tooltip: 'Export tasks',
+                              onTap: () => showTaskExportModal(
+                                context,
+                                tasks: displayedTasks.isNotEmpty
+                                    ? displayedTasks
+                                    : filtered,
+                                periodLabel: _getDueFilterLabel(_dueFilter),
+                              ),
+                            ),
+                          ],
+                        ),
                 ),
-              ),
 
               // Collapsible Search Input
               AnimatedSize(
@@ -563,8 +822,8 @@ class _TasksScreenState extends State<TasksScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
-                              borderSide: const BorderSide(
-                                color: Color(0xFFFF7A1A),
+                              borderSide: BorderSide(
+                                color: AppTheme.primaryColor,
                                 width: 1.5,
                               ),
                             ),
@@ -576,7 +835,9 @@ class _TasksScreenState extends State<TasksScreen> {
                     : const SizedBox.shrink(),
               ),
 
-              const SizedBox(height: 4),
+              // Project Space Pills Bar
+              const DuskProjectPillsBar(),
+              const SizedBox(height: 6),
 
               // 2. Clean Status Segmented Tab Bar
               Padding(
@@ -611,6 +872,8 @@ class _TasksScreenState extends State<TasksScreen> {
                               _getDueFilterLabel(_dueFilter),
                             if (_sourceFilter != 'all')
                               _getSourceFilterLabel(_sourceFilter),
+                            if (_selectedTagFilter != null)
+                              '#$_selectedTagFilter',
                           ].join(' • '),
                           style: const TextStyle(
                             fontSize: 12,
@@ -624,14 +887,15 @@ class _TasksScreenState extends State<TasksScreen> {
                           setState(() {
                             _sourceFilter = 'all';
                             _dueFilter = TaskDueFilter.all;
+                            _selectedTagFilter = null;
                           });
                         },
-                        child: const Text(
+                        child: Text(
                           'Clear',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFFFF7A1A),
+                            color: AppTheme.primaryColor,
                           ),
                         ),
                       ),
@@ -644,7 +908,7 @@ class _TasksScreenState extends State<TasksScreen> {
               // 3. Minimal Tasks List
               Expanded(
                 child: RefreshIndicator(
-                  color: const Color(0xFFFF7A1A),
+                  color: AppTheme.primaryColor,
                   backgroundColor: Colors.white,
                   onRefresh: () => context.read<AppState>().syncTasks(),
                   child: displayedTasks.isEmpty
@@ -666,8 +930,9 @@ class _TasksScreenState extends State<TasksScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildEmptyState() {
     String title;
@@ -755,10 +1020,12 @@ class _TasksScreenState extends State<TasksScreen> {
                 : isDump
                     ? 'From Capture'
                     : 'Quick Task';
+    final project = task.projectId != null ? appState.getProjectById(task.projectId!) : null;
+    final isSelected = _selectedTaskIds.contains(task.id);
 
     return Dismissible(
       key: ValueKey('task_${task.id}_${task.status.name}'),
-      direction: DismissDirection.endToStart,
+      direction: _isMultiSelect ? DismissDirection.none : DismissDirection.endToStart,
       background: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -785,32 +1052,60 @@ class _TasksScreenState extends State<TasksScreen> {
           appState.deleteTask(task.id);
         } else {
           appState.archiveTask(task.id);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Task archived'),
-              duration: const Duration(seconds: 2),
-              action: SnackBarAction(
-                label: 'Undo',
-                onPressed: () => appState.unarchiveTask(task.id),
-              ),
+          showDuskSnackBar(
+            context,
+            content: const Text('Task archived'),
+            duration: const Duration(milliseconds: 1800),
+            action: SnackBarAction(
+              label: 'Undo',
+              textColor: const Color(0xFFFF9646),
+              onPressed: () => appState.unarchiveTask(task.id),
             ),
           );
         }
       },
       child: GestureDetector(
-        onTap: () => showQuickTaskSheet(context, existingTask: task),
+        onLongPress: () {
+          HapticFeedback.mediumImpact();
+          setState(() {
+            _isMultiSelect = true;
+            _selectedTaskIds.add(task.id);
+          });
+        },
+        onTap: () {
+          if (_isMultiSelect) {
+            HapticFeedback.selectionClick();
+            setState(() {
+              if (_selectedTaskIds.contains(task.id)) {
+                _selectedTaskIds.remove(task.id);
+                if (_selectedTaskIds.isEmpty) {
+                  _isMultiSelect = false;
+                }
+              } else {
+                _selectedTaskIds.add(task.id);
+              }
+            });
+          } else {
+            showQuickTaskSheet(context, existingTask: task);
+          }
+        },
         child: Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: _isMultiSelect && isSelected
+                ? const Color(0xFFFFF9F5)
+                : Colors.white,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: task.isOverdue
-                  ? const Color(0xFFE84F6E).withValues(alpha: 0.32)
-                  : task.isDone
-                      ? const Color(0xFF389F7F).withValues(alpha: 0.22)
-                      : const Color(0xFFF0EBE1),
+              color: _isMultiSelect && isSelected
+                  ? const Color(0xFFFF7A1A)
+                  : task.isOverdue
+                      ? const Color(0xFFE84F6E).withValues(alpha: 0.32)
+                      : task.isDone
+                          ? AppTheme.tertiaryColor.withValues(alpha: 0.28)
+                          : const Color(0xFFF0EBE1),
+              width: _isMultiSelect && isSelected ? 1.6 : 1.0,
             ),
             boxShadow: [
               BoxShadow(
@@ -823,12 +1118,26 @@ class _TasksScreenState extends State<TasksScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 1. Clean circular checkbox
+              // 1. Clean circular checkbox / multi-select indicator
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
-                  HapticFeedback.lightImpact();
-                  appState.toggleTaskDone(task.id);
+                  if (_isMultiSelect) {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      if (_selectedTaskIds.contains(task.id)) {
+                        _selectedTaskIds.remove(task.id);
+                        if (_selectedTaskIds.isEmpty) {
+                          _isMultiSelect = false;
+                        }
+                      } else {
+                        _selectedTaskIds.add(task.id);
+                      }
+                    });
+                  } else {
+                    HapticFeedback.lightImpact();
+                    appState.toggleTaskDone(task.id);
+                  }
                 },
                 child: Padding(
                   padding: const EdgeInsets.only(right: 13, top: 2, bottom: 2),
@@ -838,19 +1147,23 @@ class _TasksScreenState extends State<TasksScreen> {
                     height: 22,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: task.isDone
-                          ? const Color(0xFF389F7F)
-                          : Colors.transparent,
+                      color: _isMultiSelect
+                          ? (isSelected ? const Color(0xFFFF7A1A) : Colors.transparent)
+                          : (task.isDone ? AppTheme.tertiaryColor : Colors.transparent),
                       border: Border.all(
-                        color: task.isDone
-                            ? const Color(0xFF389F7F)
-                            : task.isOverdue
-                                ? const Color(0xFFE84F6E)
-                                : const Color(0xFFD5CEC4),
+                        color: _isMultiSelect
+                            ? (isSelected
+                                ? const Color(0xFFFF7A1A)
+                                : const Color(0xFFD5CEC4))
+                            : (task.isDone
+                                ? AppTheme.tertiaryColor
+                                : task.isOverdue
+                                    ? const Color(0xFFE84F6E)
+                                    : const Color(0xFFD5CEC4)),
                         width: 1.8,
                       ),
                     ),
-                    child: task.isDone
+                    child: (_isMultiSelect ? isSelected : task.isDone)
                         ? const Icon(
                             Icons.check_rounded,
                             size: 14,
@@ -861,7 +1174,7 @@ class _TasksScreenState extends State<TasksScreen> {
                 ),
               ),
 
-              // 2. Title & quiet source subtitle
+              // 2. Title & quiet source subtitle + tags
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -893,7 +1206,7 @@ class _TasksScreenState extends State<TasksScreen> {
                                   );
                               if (dump != null) {
                                 Navigator.of(context).push(
-                                  MaterialPageRoute(
+                                  DuskPageRoute.perspectiveSlide(
                                     builder: (_) =>
                                         DumpDetailScreen(dump: dump),
                                   ),
@@ -926,9 +1239,88 @@ class _TasksScreenState extends State<TasksScreen> {
                               ),
                             ),
                           ),
+                          if (project != null) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: Color(project.colorValue).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Color(project.colorValue).withValues(alpha: 0.28),
+                                  width: 0.8,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(project.icon, style: const TextStyle(fontSize: 9.5)),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    project.name,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(project.colorValue),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
+                    if (task.tags.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 4,
+                        children: task.tags.map((tag) {
+                          final isFilterMatch =
+                              _selectedTagFilter?.toLowerCase() ==
+                                  tag.toLowerCase();
+                          return GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              setState(() {
+                                _selectedTagFilter = isFilterMatch ? null : tag;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isFilterMatch
+                                    ? AppTheme.primaryContainer
+                                    : const Color(0xFFF6F3EC),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: isFilterMatch
+                                      ? AppTheme.primaryColor
+                                      : const Color(0xFFE8E2D8),
+                                ),
+                              ),
+                              child: Text(
+                                '#$tag',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: isFilterMatch
+                                      ? FontWeight.w700
+                                      : FontWeight.w600,
+                                  color: isFilterMatch
+                                      ? AppTheme.onPrimaryContainer
+                                      : const Color(0xFF6E6862),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -950,12 +1342,12 @@ class _TasksScreenState extends State<TasksScreen> {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => showQuickTaskSheet(context, existingTask: task),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
+        child: const Padding(
+          padding: EdgeInsets.all(4),
           child: Icon(
             Icons.event_outlined,
             size: 17,
-            color: const Color(0xFFC5BEB4),
+            color: Color(0xFFC5BEB4),
           ),
         ),
       );
@@ -986,13 +1378,13 @@ class _TasksScreenState extends State<TasksScreen> {
       icon = Icons.error_outline_rounded;
     } else if (dueDay.isAtSameMomentAs(todayStart)) {
       label = 'Today';
-      bgColor = const Color(0xFFFFEFE3);
-      textColor = const Color(0xFFD95F08);
+      bgColor = AppTheme.primaryContainer;
+      textColor = AppTheme.onPrimaryContainer;
       icon = Icons.today_rounded;
     } else if (dueDay.isAtSameMomentAs(tomorrowStart)) {
       label = 'Tomorrow';
-      bgColor = const Color(0xFFEAF2FC);
-      textColor = const Color(0xFF3B7ED4);
+      bgColor = AppTheme.secondaryContainer;
+      textColor = AppTheme.onSecondaryContainer;
     } else {
       label = DateFormat('MMM d').format(localDue);
       bgColor = const Color(0xFFF3EFE9);
@@ -1061,6 +1453,8 @@ class _QuickTaskSheet extends StatefulWidget {
 class _QuickTaskSheetState extends State<_QuickTaskSheet> {
   late final TextEditingController _titleController;
   DateTime? _selectedDueDate;
+  late List<String> _selectedTags;
+  String? _selectedProjectId;
 
   bool get _isEditing => widget.existingTask != null;
 
@@ -1071,6 +1465,9 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
       text: widget.existingTask?.title ?? '',
     );
     _selectedDueDate = widget.existingTask?.dueDate;
+    _selectedTags = List<String>.from(widget.existingTask?.tags ?? const []);
+    _selectedProjectId = widget.existingTask?.projectId ??
+        widget.parentContext.read<AppState>().activeProjectId;
   }
 
   @override
@@ -1102,9 +1499,9 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
-                  primary: const Color(0xFFFF7A1A),
+                  primary: AppTheme.primaryColor,
                   onPrimary: Colors.white,
-                  surface: const Color(0xFFF9F7F2),
+                  surface: AppTheme.backgroundColor,
                   onSurface: const Color(0xFF1B1A19),
                 ),
           ),
@@ -1134,23 +1531,28 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
         title: text,
         dueDate: _selectedDueDate,
         clearDueDate: _selectedDueDate == null && prev.dueDate != null,
+        tags: _selectedTags,
       );
+      if (_selectedProjectId != prev.projectId) {
+        await appState.setTaskProject(prev.id, _selectedProjectId);
+      }
     } else {
       await appState.addManualTask(
         text,
         sourceType: TaskSourceType.manual,
         sourceLabel: 'Quick Task',
         dueDate: _selectedDueDate,
+        tags: _selectedTags,
+        projectId: _selectedProjectId,
       );
       if (widget.parentContext.mounted) {
         final dueSuffix = _selectedDueDate != null
             ? ' (Due ${DateFormat('MMM d').format(_selectedDueDate!)})'
             : '';
-        ScaffoldMessenger.of(widget.parentContext).showSnackBar(
-          SnackBar(
-            content: Text('Task added$dueSuffix'),
-            duration: const Duration(seconds: 2),
-          ),
+        showDuskSnackBar(
+          widget.parentContext,
+          content: Text('Task added$dueSuffix'),
+          duration: const Duration(milliseconds: 1800),
         );
       }
     }
@@ -1158,6 +1560,7 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
     final mediaQuery = MediaQuery.of(context);
     final bottomInset = mediaQuery.viewInsets.bottom;
     final maxSheetHeight = mediaQuery.size.height * 0.88;
@@ -1279,7 +1682,7 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
                     hintText: 'What needs to get done?',
                     hintStyle: const TextStyle(color: Color(0xFFA59F95)),
                     filled: true,
-                    fillColor: const Color(0xFFF9F7F2),
+                    fillColor: AppTheme.backgroundColor,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 14,
@@ -1294,8 +1697,8 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(
-                        color: Color(0xFFFF7A1A),
+                      borderSide: BorderSide(
+                        color: AppTheme.primaryColor,
                         width: 1.5,
                       ),
                     ),
@@ -1331,14 +1734,14 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
                     if (_selectedDueDate != null)
                       GestureDetector(
                         onTap: () => setState(() => _selectedDueDate = null),
-                        child: const Padding(
-                          padding: EdgeInsets.only(left: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
                           child: Text(
                             'Clear',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: Color(0xFFFF7A1A),
+                              color: AppTheme.primaryColor,
                             ),
                           ),
                         ),
@@ -1400,6 +1803,34 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text(
+                      'Space',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF6E6862),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    DuskProjectSelectorChip(
+                      selectedProjectId: _selectedProjectId,
+                      onProjectChanged: (newId) =>
+                          setState(() => _selectedProjectId = newId),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                DuskTagSelector(
+                  label: 'Tags (Optional)',
+                  wrap: true,
+                  availableTags: appState.availableTags,
+                  selectedTags: _selectedTags,
+                  onChanged: (tags) => setState(() => _selectedTags = tags),
+                  onCreateCustomTag: (tag) => appState.addCustomTag(tag),
+                ),
                 const SizedBox(height: 20),
                 DuskPrimaryButton(
                   label: _isEditing ? 'Save Changes' : 'Create Task',
@@ -1428,12 +1859,12 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFFFFEFE3)
+              ? AppTheme.primaryContainer
               : const Color(0xFFF6F3EC),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isSelected
-                ? const Color(0xFFFF7A1A)
+                ? AppTheme.primaryColor
                 : const Color(0xFFE8E2D8),
           ),
         ),
@@ -1444,7 +1875,7 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
               icon,
               size: 14,
               color: isSelected
-                  ? const Color(0xFFD95F08)
+                  ? AppTheme.onPrimaryContainer
                   : const Color(0xFF767068),
             ),
             const SizedBox(width: 5),
@@ -1454,7 +1885,7 @@ class _QuickTaskSheetState extends State<_QuickTaskSheet> {
                 fontSize: 12.5,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
                 color: isSelected
-                    ? const Color(0xFFD95F08)
+                    ? AppTheme.onPrimaryContainer
                     : const Color(0xFF5E5850),
               ),
             ),
@@ -1547,7 +1978,7 @@ void showTaskExportModal(
                     constraints: const BoxConstraints(maxHeight: 190),
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF9F7F2),
+                      color: AppTheme.backgroundColor,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: const Color(0xFFECE7DE)),
                     ),
@@ -1592,12 +2023,12 @@ void showTaskExportModal(
                             );
                             if (ctx.mounted) {
                               Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Markdown copied to clipboard',
-                                  ),
+                              showDuskSnackBar(
+                                context,
+                                content: const Text(
+                                  'Markdown copied to clipboard',
                                 ),
+                                duration: const Duration(milliseconds: 1800),
                               );
                             }
                           },

@@ -1,9 +1,14 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/app_state.dart';
 import '../screens/tasks_screen.dart';
 import '../screens/text_capture_screen.dart';
 import '../screens/voice_capture_screen.dart';
 import '../screens/photo_capture_screen.dart';
+import '../screens/paywall_screen.dart';
+import '../widgets/dusk_ui_components.dart';
+import '../theme/app_theme.dart';
 
 /// Round speed-dial FAB menu that fans out four icon buttons
 /// (Quick Task, Text, Voice, Photo) in an arc above the Plus button.
@@ -80,34 +85,136 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
     }
   }
 
+  void _showLimitReachedSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2DED6),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFDE8D7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Color(0xFFFF7A1A),
+                  size: 30,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Daily Limit Reached (20/20)',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1B1A19),
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "You've captured 20 dumps today on the Free tier. Upgrade to Dusk Pro for unlimited daily captures, 10-minute voice notes, and encrypted cloud sync.",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Color(0xFF767068),
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 24),
+            DuskPrimaryButton(
+              label: 'Unlock Dusk Pro',
+              icon: Icons.auto_awesome_rounded,
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  DuskPageRoute.modalSheet(builder: (_) => const PaywallScreen()),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text(
+                  'Maybe Tomorrow',
+                  style: TextStyle(
+                    color: Color(0xFF88827A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openCaptureScreen(Widget screen) {
     _closeMenuImmediate();
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (!appState.canCaptureDump) {
+      _showLimitReachedSheet();
+      return;
+    }
     Navigator.of(context).push(
-      MaterialPageRoute(
+      DuskPageRoute.modalSheet(
         builder: (_) => screen,
-        fullscreenDialog: true,
       ),
     );
   }
 
   void _openQuickTaskSheet() {
     _closeMenuImmediate();
+    final appState = Provider.of<AppState>(context, listen: false);
+    if (!appState.canCaptureDump) {
+      _showLimitReachedSheet();
+      return;
+    }
     showQuickTaskSheet(context);
   }
 
   Widget _buildMainFab({required double rotationTurns}) {
+    final p = AppTheme.palette;
     return Container(
       height: 60,
       width: 60,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFFFF8E3C),
-            Color(0xFFFF7A1A),
-            Color(0xFFF26400),
+            p.primaryLight,
+            p.primary,
+            p.primaryDark,
           ],
         ),
         border: Border.all(
@@ -116,7 +223,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFFFF7A1A).withValues(alpha: 0.38),
+            color: p.primary.withValues(alpha: 0.38),
             blurRadius: 18,
             offset: const Offset(0, 6),
           ),
@@ -131,10 +238,10 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
           child: Center(
             child: Transform.rotate(
               angle: rotationTurns * 2 * math.pi,
-              child: const Icon(
+              child: Icon(
                 Icons.add_rounded,
                 size: 30,
-                color: Colors.white,
+                color: p.onPrimary,
               ),
             ),
           ),
@@ -153,8 +260,9 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
     required IconData icon,
     required String tooltip,
     required VoidCallback onTap,
-    Color iconColor = const Color(0xFFFF7A1A),
+    Color? iconColor,
   }) {
+    final p = AppTheme.palette;
     final rad = angleDeg * math.pi / 180.0;
     final dx = radius * math.sin(rad);
     final dy = -radius * math.cos(rad);
@@ -173,9 +281,9 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white,
+                color: p.surface,
                 border: Border.all(
-                  color: const Color(0xFFF0EBE1),
+                  color: p.outline,
                   width: 1.5,
                 ),
                 boxShadow: [
@@ -196,7 +304,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
                     child: Icon(
                       icon,
                       size: 23,
-                      color: iconColor,
+                      color: iconColor ?? p.primary,
                     ),
                   ),
                 ),
@@ -210,6 +318,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
 
   @override
   Widget build(BuildContext context) {
+    final p = AppTheme.of(context);
     const double overlayBoxSize = 270.0;
     const double center = overlayBoxSize / 2;
     const double optionButtonSize = 50.0;
@@ -272,7 +381,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
                           opacity: fadeValue,
                           icon: Icons.add_task_rounded,
                           tooltip: 'Quick Task',
-                          iconColor: const Color(0xFF389F7F),
+                          iconColor: p.tertiary,
                           onTap: _openQuickTaskSheet,
                         ),
                         // 2. Text Dump Option
@@ -285,6 +394,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
                           opacity: fadeValue,
                           icon: Icons.edit_note_rounded,
                           tooltip: 'Text Capture',
+                          iconColor: p.primary,
                           onTap: () =>
                               _openCaptureScreen(const TextCaptureScreen()),
                         ),
@@ -298,6 +408,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
                           opacity: fadeValue,
                           icon: Icons.mic_rounded,
                           tooltip: 'Voice Capture',
+                          iconColor: p.secondary,
                           onTap: () =>
                               _openCaptureScreen(const VoiceCaptureScreen()),
                         ),
@@ -311,6 +422,7 @@ class _CaptureSpeedDialState extends State<CaptureSpeedDial>
                           opacity: fadeValue,
                           icon: Icons.photo_camera_rounded,
                           tooltip: 'Photo Capture',
+                          iconColor: p.primary,
                           onTap: () =>
                               _openCaptureScreen(const PhotoCaptureScreen()),
                         ),

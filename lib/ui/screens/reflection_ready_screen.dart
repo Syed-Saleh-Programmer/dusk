@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../services/notification_service.dart';
 import 'ai_cycle_summary_screen.dart';
+import '../theme/app_theme.dart';
 import '../widgets/dusk_ui_components.dart';
 
 class ReflectionReadyScreen extends StatefulWidget {
@@ -39,8 +40,10 @@ class _ReflectionReadyScreenState extends State<ReflectionReadyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppTheme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: p.background,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: SingleChildScrollView(
@@ -62,40 +65,40 @@ class _ReflectionReadyScreenState extends State<ReflectionReadyScreen> {
                     width: 76,
                     height: 76,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFDE8D7),
+                      color: p.primaryContainer,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFFF7A1A).withValues(alpha: 0.2),
+                          color: p.primary.withValues(alpha: 0.25),
                           blurRadius: 20,
                           offset: const Offset(0, 6),
                         ),
                       ],
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.nights_stay_rounded,
                       size: 38,
-                      color: Color(0xFFFF7A1A),
+                      color: p.primary,
                     ),
                   ),
                 ).animate().fade().scale(),
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   "Your reflection is ready.",
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
-                    color: Color(0xFF1B1A19),
+                    color: p.onSurface,
                     letterSpacing: -0.5,
                   ),
                   textAlign: TextAlign.center,
                 ).animate().fade(delay: 100.ms).slideY(begin: 0.1),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   "Take 5 quiet minutes to review your captures and close today's cycle.",
                   style: TextStyle(
                     fontSize: 15,
-                    color: Color(0xFF6E6862),
+                    color: p.onSurfaceVariant,
                     height: 1.45,
                   ),
                   textAlign: TextAlign.center,
@@ -129,37 +132,38 @@ class _ReflectionReadyScreenState extends State<ReflectionReadyScreen> {
                 const SizedBox(height: 48),
                 
                 DuskPrimaryButton(
-                  label: "Begin Reflection Ritual",
+                  label: "Begin Reflection",
                   icon: Icons.auto_awesome_rounded,
                   onPressed: () {
                     Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      DuskPageRoute.ritual(
                         builder: (_) => AiCycleSummaryScreen(cycleId: widget.cycleId),
                       ),
                     );
                   },
                 ).animate().fade(delay: 400.ms).slideY(begin: 0.1),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     TextButton(
                       onPressed: _snoozeOneHour,
-                      child: const Text(
+                      child: Text(
                         "Remind me in 1 hour",
-                        style: TextStyle(color: Color(0xFF88827A), fontWeight: FontWeight.w500),
+                        style: TextStyle(color: p.onSurfaceVariant, fontWeight: FontWeight.w500),
                       ),
                     ),
-                    const Text(
+                    Text(
                       " • ",
-                      style: TextStyle(color: Color(0xFFBEB7AC)),
+                      style: TextStyle(color: p.outlineVariant),
                     ),
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text(
+                      child: Text(
                         "Skip this cycle",
-                        style: TextStyle(color: Color(0xFF88827A), fontWeight: FontWeight.w500),
+                        style: TextStyle(color: p.onSurfaceVariant, fontWeight: FontWeight.w500),
                       ),
                     ),
                   ],

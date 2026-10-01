@@ -1,15 +1,20 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:provider/provider.dart';
 import '../widgets/audio_player_widget.dart';
+import '../widgets/dusk_ui_components.dart';
+import '../widgets/project_components.dart';
+import '../../models/dump.dart';
 import '../../services/supabase_service.dart';
 import '../../services/local_db_service.dart';
 import '../../services/capture_service.dart';
 import '../../services/task_service.dart';
 import '../../providers/app_state.dart';
+import '../navigation/dusk_navigation.dart';
 import 'tasks_screen.dart';
 
 class DumpDetailScreen extends StatefulWidget {
@@ -29,6 +34,7 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
   void initState() {
     super.initState();
     _dump = Map<String, dynamic>.from(widget.dump);
+    _dump['tags'] = Dump.parseTags(_dump['tags']);
     final dumpId = _dump['id']?.toString() ?? '';
     if (CaptureService().isProcessing(dumpId) || _dump['is_processing'] == true) {
       // CaptureService is already syncing & summarizing in the background; AppState listener will update us immediately
@@ -58,13 +64,21 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
           _dump['title'] = localDump.title;
           _dump['category'] = localDump.title;
         }
+        if (localDump.tags.isNotEmpty) {
+          _dump['tags'] = localDump.tags;
+        }
         if (localDump.aiSummary != null && localDump.aiSummary!.trim().isNotEmpty) {
           if (mounted) {
             setState(() {
               _dump['ai_summary'] = localDump.aiSummary;
               _isLoadingSummary = false;
             });
-            _notifyAppState(dumpId, localDump.aiSummary!, title: localDump.title);
+            _notifyAppState(
+              dumpId,
+              localDump.aiSummary!,
+              title: localDump.title,
+              tags: localDump.tags.isNotEmpty ? localDump.tags : null,
+            );
           }
           return;
         }
@@ -82,25 +96,49 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
           _dump['title'] = remoteDump['title'];
           _dump['category'] = remoteDump['title'];
         }
+        final remoteTags = Dump.parseTags(remoteDump['tags']);
+        if (remoteTags.isNotEmpty) {
+          _dump['tags'] = remoteTags;
+        }
         final summary = remoteDump['ai_summary'] as String?;
         if (summary != null && summary.trim().isNotEmpty) {
-          await LocalDbService().updateDumpAiSummary(dumpId, summary, title: remoteDump['title']);
+          await LocalDbService().updateDumpAiSummary(
+            dumpId,
+            summary,
+            title: remoteDump['title'],
+            tags: remoteTags.isNotEmpty ? remoteTags : null,
+          );
           if (mounted) {
             setState(() {
               _dump['ai_summary'] = summary;
               _isLoadingSummary = false;
             });
-            _notifyAppState(dumpId, summary, title: remoteDump['title']);
+            _notifyAppState(
+              dumpId,
+              summary,
+              title: remoteDump['title'],
+              tags: remoteTags.isNotEmpty ? remoteTags : null,
+            );
           }
           return;
         }
       }
     } catch (_) {}
 
-    // 3. For text dumps, generate the AI summary directly if still missing
-    if (_dump['type'] == 'text') {
+    // 3. Generate AI summary directly if text/transcript/note is available, or trigger full media processing
+    final hasTextContent =
+        (_dump['content'] as String?)?.trim().isNotEmpty == true ||
+        (_dump['transcript'] as String?)?.trim().isNotEmpty == true;
+
+    if (hasTextContent) {
       await _generateAiSummary();
     } else {
+      try {
+        final localDump = await LocalDbService().getDumpById(dumpId);
+        if (localDump != null) {
+          unawaited(CaptureService().processDumpIfNeeded(localDump));
+        }
+      } catch (_) {}
       if (mounted) setState(() => _isLoadingSummary = false);
     }
   }
@@ -113,14 +151,21 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
       return;
     }
 
-    final content = (_dump['type'] == 'text')
-        ? (_dump['content'] as String?)
-        : (_dump['transcript'] as String? ?? _dump['content'] as String?);
+    final rawContent = (_dump['content'] as String?)?.trim() ?? '';
+    final rawTranscript = (_dump['transcript'] as String?)?.trim() ?? '';
+    final content = [
+      if (rawContent.isNotEmpty) rawContent,
+      if (rawTranscript.isNotEmpty && rawTranscript != rawContent) rawTranscript,
+    ].join('\n\n');
 
-    if (content == null || content.trim().isEmpty) {
+    if (content.isEmpty) {
       if (mounted) setState(() => _isLoadingSummary = false);
       return;
     }
+
+    final appState = mounted ? context.read<AppState>() : null;
+    final availableTags = appState?.availableTags ?? Dump.defaultTags;
+    final existingTags = Dump.parseTags(_dump['tags']);
 
     if (mounted) setState(() => _isLoadingSummary = true);
 
@@ -132,12 +177,19 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
         userId,
         content: content,
         type: type,
+        availableTags: availableTags,
+        existingTags: existingTags,
       );
 
       if (result != null) {
         final summary = result['summary'];
         final title = result['title'];
-        final aiTasks = TaskService.parseTaskStrings(result['tasks_json']);
+        final aiStructuredTasks = TaskService.parseAiTasks(result['tasks_json']);
+        final aiTags = Dump.parseTags(result['tags_json']);
+        final mergedTags = Dump.parseTags([...existingTags, ...aiTags]);
+        if (aiTags.isNotEmpty && appState != null) {
+          unawaited(appState.addCustomTags(aiTags));
+        }
         final capturedAt = DateTime.tryParse(
               (_dump['captured_at'] ?? _dump['created_at'])?.toString() ?? '',
             )?.toLocal() ??
@@ -150,10 +202,17 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
           content: _dump['content']?.toString(),
           transcript: _dump['transcript']?.toString(),
           aiSummary: summary,
-          aiTasks: aiTasks,
+          aiStructuredTasks: aiStructuredTasks,
+          dumpTags: mergedTags,
+          availableTags: availableTags,
         );
         if (summary != null && summary.trim().isNotEmpty) {
-          await LocalDbService().updateDumpAiSummary(dumpId, summary, title: title);
+          await LocalDbService().updateDumpAiSummary(
+            dumpId,
+            summary,
+            title: title,
+            tags: mergedTags.isNotEmpty ? mergedTags : null,
+          );
           if (mounted) {
             setState(() {
               _dump['ai_summary'] = summary;
@@ -161,9 +220,17 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
                 _dump['title'] = title;
                 _dump['category'] = title;
               }
+              if (mergedTags.isNotEmpty) {
+                _dump['tags'] = mergedTags;
+              }
               _isLoadingSummary = false;
             });
-            _notifyAppState(dumpId, summary, title: title);
+            _notifyAppState(
+              dumpId,
+              summary,
+              title: title,
+              tags: mergedTags.isNotEmpty ? mergedTags : null,
+            );
           }
           return;
         }
@@ -177,12 +244,18 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
     }
   }
 
-  void _notifyAppState(String dumpId, String summary, {String? title}) {
+  void _notifyAppState(
+    String dumpId,
+    String summary, {
+    String? title,
+    List<String>? tags,
+  }) {
     try {
       Provider.of<AppState>(context, listen: false).updateDumpInList(dumpId, {
         'ai_summary': summary,
         'title': ?title,
         'category': ?title,
+        'tags': ?tags,
       });
     } catch (_) {}
   }
@@ -195,7 +268,7 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
       default: return Icons.widgets;
     }
   }
-  
+
   String _getTypeLabel() {
     switch (_dump['type']) {
       case 'text': return 'Thought';
@@ -216,43 +289,6 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
       case 'photo': return 'Moment Detail';
       default: return 'Dump Detail';
     }
-  }
-
-  List<String> _generateTags() {
-    final tags = <String>[];
-    final type = _dump['type'] as String?;
-    final content = _dump['content'] as String? ?? '';
-    final transcript = _dump['transcript'] as String? ?? '';
-    final text = '$content $transcript'.toLowerCase();
-
-    // Type-based tag
-    switch (type) {
-      case 'text': tags.add('#Thought'); break;
-      case 'voice': tags.add('#VoiceMemo'); break;
-      case 'photo': tags.add('#Moment'); break;
-    }
-
-    // Content-based tags
-    if (text.contains('work') || text.contains('meeting') || text.contains('project')) {
-      tags.add('#Work');
-    }
-    if (text.contains('feel') || text.contains('emotion') || text.contains('happy') || text.contains('sad') || text.contains('anxious')) {
-      tags.add('#Feelings');
-    }
-    if (text.contains('idea') || text.contains('think') || text.contains('wonder')) {
-      tags.add('#Ideas');
-    }
-    if (text.contains('goal') || text.contains('plan') || text.contains('want to')) {
-      tags.add('#Goals');
-    }
-    if (text.contains('grateful') || text.contains('thankful') || text.contains('appreciate')) {
-      tags.add('#Gratitude');
-    }
-    
-    // Always add a daily log tag
-    tags.add('#DailyLog');
-
-    return tags.take(4).toList();
   }
 
   String _getCopyableText() {
@@ -286,7 +322,8 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
     final mediaUrl = _dump['media_url'] as String?;
     final capturedAt = _dump['captured_at'] ?? _dump['capturedAt'];
     final aiSummary = _dump['ai_summary'] as String?;
-    
+    final dumpTags = Dump.parseTags(_dump['tags']);
+
     // Format timestamp
     String timeLabel = 'Logged Today';
     if (capturedAt != null) {
@@ -296,7 +333,7 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
         final hour = dt.hour > 12 ? dt.hour - 12 : (dt.hour == 0 ? 12 : dt.hour);
         final amPm = dt.hour >= 12 ? 'PM' : 'AM';
         final minute = dt.minute.toString().padLeft(2, '0');
-        
+
         if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
           timeLabel = 'Today at $hour:$minute $amPm';
         } else {
@@ -340,30 +377,50 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Info
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // Header Info: Type badge, Project Space selector chip, Time & Sync indicator
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.spaceBetween,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(_getIcon(), size: 16, color: Theme.of(context).colorScheme.primary),
-                      const SizedBox(width: 6),
-                      Text(
-                        _getTypeLabel(),
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_getIcon(), size: 16, color: Theme.of(context).colorScheme.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            _getTypeLabel(),
+                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    DuskProjectSelectorChip(
+                      selectedProjectId: _dump['project_id'] as String?,
+                      onProjectChanged: (newId) async {
+                        setState(() => _dump['project_id'] = newId);
+                        if (dumpId != null) {
+                          await appState.setDumpProject(dumpId, newId);
+                        }
+                      },
+                    ),
+                  ],
                 ),
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_dump['sync_status'] == 'synced')
                       Icon(Icons.cloud_done, size: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -380,18 +437,18 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
                 ),
               ],
             ).animate().fadeIn().slideX(begin: -0.05),
-            
+
             const SizedBox(height: 24),
 
             // AI Summary Section
             _buildAiSummarySection(context, aiSummary),
-            
+
             // Audio Player for Voice
             if (type == 'voice' && mediaUrl != null && mediaUrl.isNotEmpty) ...[
               AudioPlayerWidget(audioUrl: mediaUrl).animate().fadeIn(delay: 100.ms).slideY(begin: 0.05),
               const SizedBox(height: 24),
             ],
-            
+
             // Image Thumbnail for Photo
             if (type == 'photo' && mediaUrl != null && mediaUrl.isNotEmpty) ...[
               ClipRRect(
@@ -475,7 +532,7 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
               ).animate().fadeIn(delay: 150.ms).slideY(begin: 0.05),
               const SizedBox(height: 24),
             ],
-            
+
             // Transcribed Voice / Extracted Photo Text
             if (transcript != null && transcript.trim().isNotEmpty) ...[
               Container(
@@ -503,20 +560,26 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
                           color: Theme.of(context).colorScheme.tertiary,
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          type == 'voice' ? 'VOICE TRANSCRIPT' : 'EXTRACTED TEXT & DETAILS',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.tertiary,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
+                        Expanded(
+                          child: Text(
+                            type == 'voice' ? 'VOICE TRANSCRIPT' : 'EXTRACTED TEXT & DETAILS',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).colorScheme.tertiary,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.2,
+                            ),
                           ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 8),
                         InkWell(
                           onTap: () {
                             Clipboard.setData(ClipboardData(text: transcript));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Copied to clipboard'), duration: Duration(seconds: 2)),
+                            showDuskSnackBar(
+                              context,
+                              content: const Text('Copied to clipboard'),
+                              duration: const Duration(milliseconds: 1800),
                             );
                           },
                           child: Icon(Icons.content_copy, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
@@ -546,26 +609,36 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
               ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.05),
               const SizedBox(height: 24),
             ],
-            
+
             // Extracted Tasks from this Capture
             _buildDumpTasksSection(context),
 
-            // Dynamic Tags
-            Text(
-              'Connected Themes',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+            // Tags Section (Interactive Selection & Custom Tag Creation)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFF0EBE1)),
+              ),
+              child: DuskTagSelector(
+                label: 'Tags',
+                wrap: true,
+                availableTags: appState.availableTags,
+                selectedTags: dumpTags,
+                onChanged: (updatedTags) {
+                  setState(() => _dump['tags'] = updatedTags);
+                  if (dumpId != null) {
+                    appState.updateDumpTags(dumpId, updatedTags);
+                  }
+                },
+                onCreateCustomTag: (tag) => appState.addCustomTag(tag),
               ),
             ).animate().fadeIn(delay: 300.ms),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _generateTags().map((tag) => _buildTag(context, tag)).toList(),
-            ).animate().fadeIn(delay: 350.ms),
-            
+
             const SizedBox(height: 32),
-            
+
             // Action Buttons
             Row(
               children: [
@@ -632,29 +705,37 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: const [
-                      Icon(
-                        Icons.task_alt_rounded,
-                        size: 18,
-                        color: Color(0xFF389F7F),
-                      ),
-                      SizedBox(width: 8),
-                      Text(
-                        'EXTRACTED TASKS',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.0,
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(
+                          Icons.task_alt_rounded,
+                          size: 18,
                           color: Color(0xFF389F7F),
                         ),
-                      ),
-                    ],
+                        SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'EXTRACTED TASKS',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                              color: Color(0xFF389F7F),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   GestureDetector(
                     onTap: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(
+                        DuskPageRoute.perspectiveSlide(
                           builder: (_) =>
                               const TasksScreen(showBackButton: true),
                         ),
@@ -662,6 +743,8 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
                     },
                     child: const Text(
                       'View all in Tasks →',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -706,18 +789,53 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
                               : null,
                         ),
                         Expanded(
-                          child: Text(
-                            task.title,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: task.isDone
-                                  ? const Color(0xFF9E978E)
-                                  : const Color(0xFF1B1A19),
-                              decoration: task.isDone
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                task.title,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: task.isDone
+                                      ? const Color(0xFF9E978E)
+                                      : const Color(0xFF1B1A19),
+                                  decoration: task.isDone
+                                      ? TextDecoration.lineThrough
+                                      : TextDecoration.none,
+                                ),
+                              ),
+                              if (task.tags.isNotEmpty) ...[
+                                const SizedBox(height: 5),
+                                Wrap(
+                                  spacing: 5,
+                                  runSpacing: 4,
+                                  children: task.tags.map((tag) {
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF6F3EC),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: const Color(0xFFE8E2D8),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '#$tag',
+                                        style: const TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF6E6862),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],
@@ -886,11 +1004,10 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
 
   void _copyToClipboard(BuildContext context) {
     Clipboard.setData(ClipboardData(text: _getCopyableText()));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Copied to clipboard'),
-        duration: Duration(seconds: 2),
-      ),
+    showDuskSnackBar(
+      context,
+      content: const Text('Copied to clipboard'),
+      duration: const Duration(milliseconds: 1800),
     );
   }
 
@@ -913,11 +1030,10 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
                 // Optimistic 0ms UI deletion (deletes from local DB & cloud in background)
                 context.read<AppState>().deleteDump(dumpId);
               }
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Dump deleted'),
-                  duration: Duration(seconds: 2),
-                ),
+              showDuskSnackBar(
+                context,
+                content: const Text('Dump deleted'),
+                duration: const Duration(milliseconds: 1800),
               );
               Navigator.of(context).pop(true);
             },
@@ -925,22 +1041,6 @@ class _DumpDetailScreenState extends State<DumpDetailScreen> {
             child: const Text('Delete'),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTag(BuildContext context, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
       ),
     );
   }

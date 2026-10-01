@@ -6,6 +6,9 @@ import '../../models/dump.dart';
 import '../../providers/app_state.dart';
 import '../../main.dart';
 import '../widgets/dusk_ui_components.dart';
+import '../widgets/project_components.dart';
+import '../theme/app_theme.dart';
+import 'paywall_screen.dart';
 
 class PhotoCaptureScreen extends StatefulWidget {
   const PhotoCaptureScreen({super.key});
@@ -17,6 +20,14 @@ class PhotoCaptureScreen extends StatefulWidget {
 class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
   final CaptureService _captureService = CaptureService();
   bool _isSaving = false;
+  List<String> _selectedTags = [];
+  String? _selectedProjectId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedProjectId = context.read<AppState>().activeProjectId;
+  }
 
   Future<void> _saveAndPop(Future<Dump> Function() captureFn) async {
     if (_isSaving) return;
@@ -32,8 +43,10 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
+        showDuskSnackBar(
+          context,
+          content: Text('Failed to save: $e'),
+          duration: const Duration(milliseconds: 1800),
         );
       }
     }
@@ -55,10 +68,30 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
 
   Future<void> _pickAndSave(ImageSource source) async {
     if (_isSaving) return;
+
+    final appState = context.read<AppState>();
+    if (!appState.canCaptureDump) {
+      showDuskSnackBar(
+        context,
+        content: const Text("Daily limit of 20 dumps reached. Upgrade to Pro for unlimited captures."),
+        duration: const Duration(seconds: 3),
+      );
+      Navigator.of(context).push(
+        DuskPageRoute.modalSheet(builder: (_) => const PaywallScreen()),
+      );
+      return;
+    }
+
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: source);
     if (image != null) {
-      await _saveAndPop(() => _captureService.capturePhoto(image.path));
+      await _saveAndPop(
+        () => _captureService.capturePhoto(
+          image.path,
+          tags: _selectedTags,
+          projectId: _selectedProjectId,
+        ),
+      );
     }
   }
 
@@ -141,8 +174,11 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final p = AppTheme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF9F7F2),
+      backgroundColor: p.background,
       body: DuskAmbientBackground(
         child: SafeArea(
           child: Column(
@@ -159,46 +195,58 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                       iconSize: 17,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    const Text(
+                    Text(
                       'Capture Moment',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B1A19),
+                        color: p.onSurface,
                         letterSpacing: -0.2,
                       ),
                     ),
-                    const SizedBox(width: 40),
+                    const DuskQuickThemeButton(size: 38, iconSize: 18),
                   ],
+                ),
+              ),
+
+              // Project Space Selector Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DuskProjectSelectorChip(
+                    selectedProjectId: _selectedProjectId,
+                    onProjectChanged: (newId) => setState(() => _selectedProjectId = newId),
+                  ),
                 ),
               ),
 
               // Fullscreen Prominent Two Options: Camera & Gallery
               Expanded(
                 child: _isSaving
-                    ? const Center(
+                    ? Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             CircularProgressIndicator(
                               valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFFFF7A1A),
+                                p.primary,
                               ),
                             ),
-                            SizedBox(height: 16),
+                            const SizedBox(height: 16),
                             Text(
                               'Saving your moment...',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF767068),
+                                color: p.onSurfaceVariant,
                               ),
                             ),
                           ],
                         ),
                       )
                     : Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -209,10 +257,10 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                               subtitle: 'Use your camera to capture a visual moment right now',
                               iconBgColor: Colors.white.withValues(alpha: 0.22),
                               iconColor: Colors.white,
-                              cardColor: const Color(0xFFFF7A1A),
+                              cardColor: p.primary,
                               textColor: Colors.white,
                               subtitleColor: Colors.white.withValues(alpha: 0.9),
-                              borderColor: const Color(0xFFFF7A1A),
+                              borderColor: p.primary,
                               onTap: () => _pickAndSave(ImageSource.camera),
                             ),
 
@@ -223,17 +271,28 @@ class _PhotoCaptureScreenState extends State<PhotoCaptureScreen> {
                               icon: Icons.photo_library_rounded,
                               title: 'Choose from Gallery',
                               subtitle: 'Select an existing photo from your library as an insight anchor',
-                              iconBgColor: const Color(0xFFFDE8D7),
-                              iconColor: const Color(0xFFFF7A1A),
-                              cardColor: Colors.white,
-                              textColor: const Color(0xFF1B1A19),
-                              subtitleColor: const Color(0xFF767068),
-                              borderColor: const Color(0xFFECE7DE),
+                              iconBgColor: p.secondaryContainer,
+                              iconColor: p.secondary,
+                              cardColor: p.surface,
+                              textColor: p.onSurface,
+                              subtitleColor: p.onSurfaceVariant,
+                              borderColor: p.outline,
                               onTap: () => _pickAndSave(ImageSource.gallery),
                             ),
                           ],
                         ),
                       ),
+              ),
+
+              // Tag Selector Bar at Bottom
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                child: DuskTagSelector(
+                  availableTags: appState.availableTags,
+                  selectedTags: _selectedTags,
+                  onChanged: (tags) => setState(() => _selectedTags = tags),
+                  onCreateCustomTag: appState.addCustomTag,
+                ),
               ),
             ],
           ),

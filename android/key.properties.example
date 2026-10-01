@@ -1,0 +1,9 @@
+# Dusk Android Release Keystore Configuration Example
+# Copy this file to "android/key.properties" and replace with your actual keystore details:
+#
+# keyPassword=your_key_password
+# storePassword=your_keystore_password
+# keyAlias=your_key_alias
+# storeFile=../upload-keystore.jks
+#
+# (Keep android/key.properties in your .gitignore so it is never committed to Git!)
